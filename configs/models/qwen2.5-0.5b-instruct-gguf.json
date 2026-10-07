@@ -1,0 +1,147 @@
+{
+  "id": "qwen2.5-0.5b-instruct-gguf",
+  "display_name": "AlphaAI llama.cpp Engine (Qwen2.5-0.5B-Instruct GGUF)",
+  "engine": "llama_cpp",
+  "family": "qwen",
+  "provider": "alibaba",
+  "model": "Qwen2.5-0.5B-Instruct-GGUF",
+  "model_owner": "Alibaba",
+  "engine_owner": "AlphaAI",
+  "base_model": "Qwen2.5-0.5B-Instruct",
+  "status": "published",
+  "context_length": 32768,
+  "params_total_b": 0.49,
+  "params_active_b": 0.49,
+  "capabilities": [
+    "chat",
+    "streaming",
+    "tool_calling",
+    "coding",
+    "mathematics",
+    "reasoning",
+    "multilingual"
+  ],
+  "strengths": [
+    "general"
+  ],
+  "router_priority": 40,
+  "license": "Apache-2.0",
+  "license_url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/blob/main/LICENSE",
+  "license_file": "models/qwen2.5-0.5b-instruct-gguf/LICENSE",
+  "weights_url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+  "weight_formats": [
+    "q4_k_m",
+    "q8_0"
+  ],
+  "kv_bytes_per_token": 12288,
+  "runtime_requirements": {
+    "q4_k_m": {
+      "runtime": "llama_cpp",
+      "min_ram_gb": 1
+    },
+    "q8_0": {
+      "runtime": "llama_cpp",
+      "min_ram_gb": 2
+    }
+  },
+  "local_paths": [
+    "models/qwen2.5-0.5b-instruct-gguf"
+  ],
+  "weight_files": [
+    "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+  ],
+  "tokenizer_path": null,
+  "chat_template": "chatml",
+  "provenance": {
+    "source": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+    "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+    "publisher": "Alibaba / Qwen team",
+    "revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+    "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "download_url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "format": "gguf",
+    "quantization": "q4_k_m",
+    "file_size_bytes": 491400032,
+    "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+    "runtime": "llama_cpp",
+    "runtime_package": "llama-cpp-python",
+    "installed_by": "alphaai models install",
+    "local_path": "models/qwen2.5-0.5b-instruct-gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "installed_at": "2026-10-06T14:33:53Z",
+    "load_test": {
+      "ok": true,
+      "detail": "the model loaded and generated text",
+      "prompt": "Say hello in one short sentence.",
+      "text": "Hello! It's a pleasure to meet you!",
+      "completion_tokens": 10,
+      "latency_ms": 2172.3,
+      "runtime": "llama_cpp/cpu",
+      "engine_id": "qwen2.5-0.5b-instruct-gguf",
+      "model": "Qwen2.5-0.5B-Instruct-GGUF",
+      "attribution": "AlphaAI llama.cpp Engine (Qwen2.5-0.5B-Instruct GGUF) \u2014 underlying model: Qwen2.5-0.5B-Instruct-GGUF (created by Alibaba)"
+    }
+  },
+  "selection": {
+    "phase": "select-model",
+    "selected_at": "2026-10-07",
+    "criteria": {
+      "parameter_range_b": [0.3, 1.5],
+      "quantization_preference": ["q4_k_m", "q5_k_m", "q8_0"],
+      "inference_runtime": "llama_cpp",
+      "source_requirement": "official publisher repository on Hugging Face, open-weight license, not gated"
+    },
+    "hardware_basis": {
+      "source": "alphaai doctor",
+      "backend": "cpu",
+      "cpu_count": 1,
+      "cpu_threads": 1,
+      "total_ram_gb": 1.94,
+      "available_ram_gb": 0.56,
+      "gpu": "none detected (CPU inference only)",
+      "total_vram_gb": 0.0,
+      "disk_free_gb": 18.55,
+      "runtime_present": ["torch", "llama.cpp"],
+      "recommended_params_b": 0.5,
+      "recommended_quantization": "q4_k_m",
+      "installed_model_headroom_gb": 1.05
+    },
+    "decision": "Qwen2.5-0.5B-Instruct, quantised to Q4_K_M GGUF (qwen2.5-0.5b-instruct-q4_k_m.gguf, 491400032 bytes) and run by the AlphaAI llama.cpp Engine.",
+    "reasons": [
+      "Size matches the recommendation: `alphaai doctor` reports up to 1.3B parameters at q4_k_m and recommends 0.5B on this CPU-only machine.",
+      "Q4_K_M is the preferred quantisation and is published officially for this model, which is not true of the nearest alternatives.",
+      "Runtime is compatible: llama-cpp-python is installed and loads this GGUF on CPU with about 1.05 GB headroom in 1.94 GB of RAM.",
+      "Official, open-weight source: the Qwen team (Alibaba) publishes it on Hugging Face under Apache-2.0, ungated.",
+      "Capabilities cover AlphaAI's surfaces: chat, streaming and tool calling, which the engine verifies with a real load test."
+    ],
+    "alternatives_considered": [
+      {
+        "model": "Qwen2.5-1.5B-Instruct-GGUF",
+        "source": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+        "why_not": "Above the 0.5B recommendation: its Q4_K_M file is 1117 MB, so weights plus runtime overhead would not leave usable headroom on a machine with 0.56 GB available RAM."
+      },
+      {
+        "model": "Qwen3-0.6B-GGUF",
+        "source": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+        "why_not": "The official repository ships only Q8_0 (639 MB); no Q4_K_M, so it costs more memory and time, and Qwen3 thinking traces are impractical at roughly 9 tokens/second on one core."
+      },
+      {
+        "model": "SmolLM2-360M-Instruct-GGUF",
+        "source": "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF",
+        "why_not": "Official repository ships only Q8_0 (386 MB); smaller and weaker on coding and tool calling than Qwen2.5-0.5B at a similar footprint."
+      },
+      {
+        "model": "Llama-3.2-1B-Instruct",
+        "source": "https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct",
+        "why_not": "Gated on Hugging Face (account and licence acceptance required) and 1B is larger than the recommended 0.5B for this machine."
+      }
+    ],
+    "official_source": {
+      "repo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+      "publisher": "Alibaba / Qwen team",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+      "license": "Apache-2.0",
+      "gated": false
+    }
+  },
+  "notes": "The real local model AlphaAI talks through on CPU-only machines: Qwen2.5-0.5B-Instruct, quantised to Q4_K_M GGUF and run by llama.cpp. AlphaAI owns the engine integration, not the weights; the model was created by Alibaba (Apache-2.0) and AlphaAI never claims otherwise. It is a 0.5B-parameter model: it chats, answers simple maths and writes short code, but its reasoning depth is limited by design."
+}

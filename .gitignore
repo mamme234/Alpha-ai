@@ -170,3 +170,30 @@ cython_debug/
 .vscode/*
 
 .DS_Store
+
+# ---------------------------------------------------------------------------
+# AlphaAI
+# ---------------------------------------------------------------------------
+
+# Runtime state and scratch space
+.alphaai/
+workspace/
+
+# Downloaded model weights and GGUF builds (never commit large binaries)
+models/*/
+!models/.gitkeep
+
+# Generated tokenizer artefacts
+/tokenizer/tokenizer.json
+/tokenizer/manifest.json
+
+# Generated training checkpoints
+checkpoints/**/model.pt
+checkpoints/**/checkpoint.json
+checkpoints/**/options.json
+
+# Training run output (keep the committed per-experiment configs)
+training/*/runs/
+
+# Generated evaluation reports (keep evaluation/prompts.jsonl)
+evaluation/reports/

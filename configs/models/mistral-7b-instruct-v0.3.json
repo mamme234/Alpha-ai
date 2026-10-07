@@ -1,0 +1,33 @@
+{
+  "id": "mistral-7b-instruct-v0.3",
+  "display_name": "AlphaAI Mistral Engine (Mistral-7B-Instruct-v0.3)",
+  "engine": "mistral",
+  "family": "mistral",
+  "provider": "mistral ai",
+  "model": "Mistral-7B-Instruct-v0.3",
+  "model_owner": "Mistral AI",
+  "engine_owner": "AlphaAI",
+  "base_model": null,
+  "status": "published",
+  "context_length": 32768,
+  "params_total_b": 7.25,
+  "params_active_b": 7.25,
+  "capabilities": ["chat", "streaming", "coding", "tool_calling", "multilingual", "structured_output"],
+  "strengths": ["general", "summarization", "tool_calling"],
+  "router_priority": 50,
+  "license": "Apache-2.0",
+  "license_url": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/LICENSE",
+  "license_file": null,
+  "weights_url": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3",
+  "weight_formats": ["bf16", "fp16", "q4_k_m", "q5_k_m", "q8_0"],
+  "kv_bytes_per_token": 131072,
+  "runtime_requirements": {
+    "bf16": {"runtime": "torch", "min_vram_gb": 16, "min_ram_gb": 16},
+    "q4_k_m": {"runtime": "llama_cpp", "min_ram_gb": 5}
+  },
+  "local_paths": ["models/mistral-7b-instruct-v0.3"],
+  "weight_files": ["model.safetensors", "config.json", "tokenizer.json"],
+  "tokenizer_path": "models/mistral-7b-instruct-v0.3",
+  "chat_template": "mistral-instruct",
+  "notes": "Mistral-7B-Instruct-v0.3 was created by Mistral AI (Apache-2.0). AlphaAI only provides the engine."
+}

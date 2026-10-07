@@ -1,0 +1,30 @@
+{
+  "dataset": "alphaai-sample",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "source": "written for AlphaAI (no third-party text)",
+  "language": "en",
+  "seed": 1337,
+  "generated_at": "2026-10-06T12:08:50.069789+00:00",
+  "generator": "alphaai.training.dataset",
+  "splits": {
+    "train": {
+      "path": "train.jsonl",
+      "records": 20,
+      "sha256": "45277eaef02141524e599e8d247698ac164386331ef72ddb8ae4677c8ca3b34e",
+      "bytes": 6174,
+      "characters": 5474,
+      "characters_mean": 273.7
+    },
+    "valid": {
+      "path": "valid.jsonl",
+      "records": 5,
+      "sha256": "0dc78a1a3af22a131d6cda99eea573eee9936d78647f017cc9b9f601be2e1a8a",
+      "bytes": 1675,
+      "characters": 1500,
+      "characters_mean": 300.0
+    }
+  },
+  "records_total": 25,
+  "characters_total": 6974
+}

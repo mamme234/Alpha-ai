@@ -1,0 +1,43 @@
+# AlphaAI runtime profile: CPU-only machine (laptop, CI, small VM).
+#
+# Use it with:  ALPHAI_CONFIG=configs/runtime/cpu-small.toml alphaai serve
+#
+# What this profile can realistically run: small GGUF models through the
+# llama.cpp engine and small safetensors checkpoints through the transformers
+# engine. DeepSeek-V3, Kimi-K2 and the other frontier-scale entries in
+# configs/models/ will be reported as unavailable with their exact reason, which
+# is the correct behaviour on a machine that cannot hold them.
+
+name = "AlphaAI (CPU profile)"
+tagline = "Intelligence, built from the ground up."
+
+[runtime]
+device = "cpu"
+dtype = "fp32"
+cpu_threads = 0            # 0 => every available core
+gpu_layers = 0             # no GPU offload
+max_loaded_engines = 1
+allow_model_download = false
+
+[sampling]
+temperature = 0.6
+top_p = 0.95
+max_tokens = 256
+
+[tools]
+allow_network = false
+allow_code_execution = false
+allow_writes = false
+default_timeout_s = 10.0
+max_output_bytes = 32768
+
+[memory]
+enabled = true
+path = ".alphaai/memory/memory.sqlite3"
+retrieval_limit = 5
+
+[api]
+host = "0.0.0.0"
+port = 8090
+redact_paths = true
+enable_dashboard = true

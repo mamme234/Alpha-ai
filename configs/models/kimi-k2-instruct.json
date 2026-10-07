@@ -1,0 +1,42 @@
+{
+  "id": "kimi-k2-instruct",
+  "display_name": "AlphaAI Kimi Engine (Kimi-K2-Instruct)",
+  "engine": "kimi",
+  "family": "kimi",
+  "provider": "moonshot ai",
+  "model": "Kimi-K2-Instruct",
+  "model_owner": "Moonshot AI",
+  "engine_owner": "AlphaAI",
+  "base_model": null,
+  "status": "published",
+  "context_length": 131072,
+  "params_total_b": 1000.0,
+  "params_active_b": 32.0,
+  "capabilities": [
+    "chat",
+    "streaming",
+    "coding",
+    "reasoning",
+    "mathematics",
+    "long_context",
+    "tool_calling",
+    "multilingual",
+    "structured_output"
+  ],
+  "strengths": ["coding", "reasoning", "tool_calling"],
+  "router_priority": 85,
+  "license": "Modified MIT License",
+  "license_url": "https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/LICENSE",
+  "license_file": null,
+  "weights_url": "https://huggingface.co/moonshotai/Kimi-K2-Instruct",
+  "weight_formats": ["bf16"],
+  "kv_bytes_per_token": 70272,
+  "runtime_requirements": {
+    "bf16": {"runtime": "torch", "min_vram_gb": 2000, "min_ram_gb": 2000}
+  },
+  "local_paths": ["models/kimi-k2-instruct"],
+  "weight_files": ["config.json", "tokenizer.json"],
+  "tokenizer_path": "models/kimi-k2-instruct",
+  "chat_template": "chatml",
+  "notes": "Kimi-K2-Instruct was created by Moonshot AI (Modified MIT License). A 1T-parameter MoE: it needs a multi-node cluster, so AlphaAI will normally report it as unavailable rather than attempt a partial load."
+}

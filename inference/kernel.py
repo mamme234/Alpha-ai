@@ -1,3 +1,10 @@
+# Copyright (c) 2023 DeepSeek
+#
+# Part of the DeepSeek-V3 reference implementation (FP8 kernels), vendored from
+# https://github.com/deepseek-ai/DeepSeek-V3 under the MIT License (see
+# LICENSE-CODE). AlphaAI uses it through the "AlphaAI DeepSeek Engine"; the
+# code below remains under DeepSeek copyright. See NOTICE and ATTRIBUTION.md.
+
 from typing import Tuple, Optional
 
 import torch

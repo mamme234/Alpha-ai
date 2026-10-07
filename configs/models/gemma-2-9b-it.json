@@ -1,0 +1,33 @@
+{
+  "id": "gemma-2-9b-it",
+  "display_name": "AlphaAI Gemma Engine (Gemma-2-9B-IT)",
+  "engine": "gemma",
+  "family": "gemma",
+  "provider": "google",
+  "model": "Gemma-2-9B-IT",
+  "model_owner": "Google",
+  "engine_owner": "AlphaAI",
+  "base_model": null,
+  "status": "published",
+  "context_length": 8192,
+  "params_total_b": 9.24,
+  "params_active_b": 9.24,
+  "capabilities": ["chat", "streaming", "coding", "reasoning", "multilingual"],
+  "strengths": ["general", "reasoning", "summarization"],
+  "router_priority": 48,
+  "license": "Gemma Terms of Use",
+  "license_url": "https://ai.google.dev/gemma/terms",
+  "license_file": null,
+  "weights_url": "https://huggingface.co/google/gemma-2-9b-it",
+  "weight_formats": ["bf16", "fp16", "q4_k_m", "q8_0"],
+  "kv_bytes_per_token": 344064,
+  "runtime_requirements": {
+    "bf16": {"runtime": "torch", "min_vram_gb": 20, "min_ram_gb": 20},
+    "q4_k_m": {"runtime": "llama_cpp", "min_ram_gb": 8}
+  },
+  "local_paths": ["models/gemma-2-9b-it"],
+  "weight_files": ["model.safetensors", "config.json", "tokenizer.json"],
+  "tokenizer_path": "models/gemma-2-9b-it",
+  "chat_template": "gemma",
+  "notes": "Gemma-2-9B-IT was created by Google under the Gemma Terms of Use. Accept the license on Hugging Face before downloading."
+}

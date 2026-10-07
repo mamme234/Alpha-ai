@@ -6,7 +6,7 @@ on:
 
 jobs:
   stale:
-    if: ${{ github.repository == 'deepseek-ai/DeepSeek-V3' }}
+    if: ${{ github.repository == 'mamme234/Alpha-ai' }}
     runs-on: ubuntu-latest
     steps:
       - name: "Mark and close stale issues"
@@ -23,7 +23,7 @@ jobs:
             This issue has been automatically marked as stale because it has not had
             recent activity. It will be closed if no further activity occurs. If you
             believe this issue is still relevant, please leave a comment to keep it open.
-            Thank you for your contributions!
+            Thank you for your contributions to AlphaAI!
           close-issue-message: false
           days-before-pr-stale: -1
           days-before-pr-close: -1

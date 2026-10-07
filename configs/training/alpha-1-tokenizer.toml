@@ -1,0 +1,23 @@
+# AlphaAI tokenizer training configuration.
+#
+# Consumed by `alphaai train tokenize` (and scripts/training/train_tokenizer.py):
+# a real byte-level BPE tokenizer trained on the training splits of every dataset
+# under datasets/. Byte tokens occupy ids 0..255; merges follow; special tokens
+# get the highest ids.
+#
+# The reference settings are deliberately small so training finishes on a laptop.
+# For a real pretraining run raise vocab_size to 32k-128k and max_chars to the
+# full corpus size (the algorithm is identical, only slower).
+
+name = "alphaai-bpe"
+version = "1.0.0"
+vocab_size = 1024
+min_frequency = 2
+max_chars = 200000
+
+[special_tokens]
+"<|endoftext|>" = "document separator / padding"
+"<|system|>" = "system message"
+"<|user|>" = "user message"
+"<|assistant|>" = "assistant message"
+"<|tool|>" = "tool result"
