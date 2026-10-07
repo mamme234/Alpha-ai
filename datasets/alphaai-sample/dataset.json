@@ -1,0 +1,34 @@
+{
+  "name": "alphaai-sample",
+  "version": "1.0.0",
+  "description": "AlphaAI seed corpus: a small, hand-written instruction/response set used to verify the AlphaAI training foundation end to end (record schema, dedupe, split, tokenizer training, reference training loop, evaluation).",
+  "license": "Apache-2.0",
+  "source": "written for AlphaAI (no third-party text)",
+  "language": "en",
+  "format": "jsonl",
+  "splits": {
+    "train": "train.jsonl",
+    "valid": "valid.jsonl"
+  },
+  "created_by": "AlphaAI",
+  "seed": 1337,
+  "max_record_chars": 4000,
+  "min_record_chars": 8,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "instruction": {
+        "type": "string"
+      },
+      "response": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "instruction",
+      "response"
+    ],
+    "additionalProperties": false
+  },
+  "notes": "This is a starter corpus for pipeline verification, not a pretraining dataset. It contains no text from other models; every line was written for AlphaAI. Replace it with your own data (keeping dataset.json + manifest.json) for real training."
+}

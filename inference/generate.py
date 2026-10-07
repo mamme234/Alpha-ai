@@ -1,3 +1,11 @@
+# Copyright (c) 2023 DeepSeek
+#
+# Part of the DeepSeek-V3 reference implementation (generation demo), vendored
+# from https://github.com/deepseek-ai/DeepSeek-V3 under the MIT License (see
+# LICENSE-CODE). AlphaAI's own engine (alphaai/engines/deepseek.py) implements
+# the same autoregressive loop; the code below remains under DeepSeek copyright.
+# See NOTICE and ATTRIBUTION.md.
+
 import os
 import json
 from argparse import ArgumentParser

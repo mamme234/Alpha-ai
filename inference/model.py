@@ -1,3 +1,14 @@
+# Copyright (c) 2023 DeepSeek
+#
+# Part of the DeepSeek-V3 reference implementation, vendored from
+# https://github.com/deepseek-ai/DeepSeek-V3 and licensed under the MIT License
+# (see LICENSE-CODE). DeepSeek-V3 was created by DeepSeek; it is not an
+# AlphaAI-trained model.
+#
+# AlphaAI drives this implementation through the "AlphaAI DeepSeek Engine"
+# (alphaai/engines/deepseek.py). AlphaAI owns the engine layer around it; the
+# code below remains under DeepSeek copyright. See NOTICE and ATTRIBUTION.md.
+
 import math
 from dataclasses import dataclass
 from typing import Tuple, Optional, Literal

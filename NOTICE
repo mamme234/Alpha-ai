@@ -1,0 +1,49 @@
+AlphaAI — NOTICE
+================
+
+AlphaAI is an independent open-source project. It is **not** affiliated with,
+endorsed by, or sponsored by DeepSeek. "AlphaAI" and the AlphaAI system layer
+are the work of the AlphaAI project.
+
+AlphaAI owns the system layer
+-----------------------------
+The following components are original AlphaAI work and are copyright the AlphaAI
+project. They are licensed under the MIT License (see `LICENSE-CODE`) unless a
+specific file states otherwise:
+
+  * `alphaai/`   — core runtime, model registry and router, engine layer,
+                   conversation engine, context manager, memory store, tool
+                   engine, skills, agent orchestrator, FastAPI server and CLI
+  * `configs/`   — AlphaAI configuration and model metadata
+  * `training/`, `datasets/`, `tokenizer/`, `checkpoints/`, `evaluation/`,
+    `scripts/`   — the AlphaAI training foundation
+  * `docs/`      — AlphaAI documentation
+
+DeepSeek components
+-------------------
+This repository vendors the DeepSeek-V3 reference implementation unchanged so
+that the "AlphaAI DeepSeek Engine" can run DeepSeek-V3 locally:
+
+  * `inference/`  — DeepSeek-V3 reference implementation
+                    Copyright (c) 2023 DeepSeek
+                    Licensed under the MIT License (see `LICENSE-CODE`)
+
+  * DeepSeek-V3 model weights and the DeepSeek-V3 name
+                    Copyright (c) 2023-2024 DeepSeek
+                    Licensed under the DeepSeek Model License
+                    (see `LICENSE-MODEL`)
+
+DeepSeek-V3 is **not** an AlphaAI-trained model. AlphaAI does not claim
+ownership of DeepSeek-V3 or of any DeepSeek work. See `ATTRIBUTION.md` for the
+full attribution statement.
+
+Third-party models
+------------------
+AlphaAI can also run other openly released families (Qwen, Kimi, Llama,
+Mistral, Gemma). Each model remains the property of its own creator and is
+governed by that creator's license, recorded per model in `configs/models/*.json`.
+
+Trademarks
+----------
+All product names, logos and brands are the property of their respective owners.
+"DeepSeek" and other model names are used only to identify the underlying models.

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ALPHA AI — Intelligence, built from the ground up.</title>
+<style>
+  :root {
+    --bg: #070b12;
+    --bg-elev: #0d1420;
+    --panel: #111a29;
+    --line: #1e2b40;
+    --ink: #e8eef8;
+    --muted: #8ea3bf;
+    --cyan: #35e0d0;
+    --amber: #ffb347;
+    --violet: #8b93ff;
+    --danger: #ff6b6b;
+    --ok: #4ade80;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1100px 620px at 12% -10%, #14324a 0%, transparent 60%),
+      radial-gradient(900px 520px at 88% 0%, #2b2350 0%, transparent 55%),
+      var(--bg);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  a { color: var(--cyan); }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  header.hero {
+    padding: 56px 24px 36px;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 12px; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--cyan); border: 1px solid var(--line);
+    background: rgba(53,224,208,.06);
+    padding: 6px 12px; border-radius: 999px;
+  }
+  h1 {
+    font-size: clamp(44px, 8vw, 92px);
+    margin: 18px 0 6px; letter-spacing: -0.03em; line-height: .98;
+    background: linear-gradient(94deg, #ffffff 0%, var(--cyan) 46%, var(--violet) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .tagline { font-size: clamp(17px, 2.2vw, 22px); color: var(--ink); margin: 0 0 10px; }
+  .attribution { color: var(--muted); font-size: 14px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .btn {
+    appearance: none; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel); color: var(--ink); cursor: pointer;
+    padding: 11px 18px; font-size: 15px; transition: .18s ease;
+  }
+  .btn:hover { border-color: var(--cyan); transform: translateY(-1px); }
+  .btn.primary {
+    background: linear-gradient(94deg, var(--cyan), var(--violet));
+    border: none; color: #06101a; font-weight: 650;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
+  section { margin: 44px 0; }
+  h2 { font-size: 20px; letter-spacing: .02em; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,.03), transparent), var(--bg-elev);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+  }
+  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
+  .card .v { font-size: 30px; font-weight: 650; margin-top: 6px; }
+  .card .d { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+  .pill {
+    display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--muted);
+  }
+  .pill.ready, .pill.available { color: var(--ok); border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.08); }
+  .pill.unavailable, .pill.disabled { color: var(--amber); border-color: rgba(255,179,71,.35); background: rgba(255,179,71,.08); }
+  .pill.error { color: var(--danger); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.08); }
+  .console {
+    background: #060a11; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; min-height: 220px; max-height: 420px; overflow: auto; white-space: pre-wrap;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px;
+  }
+  .console .you { color: var(--cyan); }
+  .console .ai { color: var(--ink); }
+  .console .sys { color: var(--muted); }
+  .console .err { color: var(--danger); }
+  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  input[type=text], textarea, select {
+    flex: 1; min-width: 220px; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; font-size: 14.5px;
+  }
+  textarea { min-height: 74px; resize: vertical; font-family: inherit; }
+  details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 10px; background: var(--bg-elev); }
+  summary { cursor: pointer; color: var(--muted); }
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; padding: 26px 24px 60px; }
+  footer .inner { max-width: 1180px; margin: 0 auto; }
+  .two { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+  .badge-line { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <span class="eyebrow">AlphaAI Core · local inference only</span>
+  <h1>ALPHA&nbsp;AI</h1>
+  <p class="tagline">Intelligence, built from the ground up.</p>
+  <p class="attribution" id="attribution">AlphaAI powered by DeepSeek-V3 — loading attribution…</p>
+  <div class="cta">
+    <button class="btn primary" onclick="document.getElementById('chat').scrollIntoView({behavior:'smooth'})">Open the console</button>
+    <button class="btn" onclick="refreshAll()">Refresh status</button>
+    <a class="btn" href="/api/models" target="_blank" rel="noreferrer">GET /api/models</a>
+    <a class="btn" href="/docs" target="_blank" rel="noreferrer">API docs</a>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>Runtime</h2>
+    <p class="sub">Everything below is measured on this machine right now — no simulated numbers.</p>
+    <div class="grid" id="stats">
+      <div class="card"><div class="k">Engines</div><div class="v" id="stat-engines">–</div><div class="d" id="stat-engines-d">registered</div></div>
+      <div class="card"><div class="k">Usable now</div><div class="v" id="stat-usable">–</div><div class="d">with weights + runtime present</div></div>
+      <div class="card"><div class="k">Skills</div><div class="v" id="stat-skills">–</div><div class="d" id="stat-skills-d"></div></div>
+      <div class="card"><div class="k">Tools</div><div class="v" id="stat-tools">–</div><div class="d" id="stat-tools-d"></div></div>
+      <div class="card"><div class="k">Memory entries</div><div class="v" id="stat-memory">–</div><div class="d">sqlite, local</div></div>
+    </div>
+    <details><summary>Hardware report</summary><div class="console" id="hardware">…</div></details>
+  </section>
+
+  <section>
+    <h2>Engines</h2>
+    <p class="sub">An engine is real only when its runtime and its weights are both present. AlphaAI never downloads weights for you.</p>
+    <div class="card" style="overflow:auto">
+      <table>
+        <thead><tr><th>Model</th><th>Engine</th><th>Status</th><th>Owner</th><th>Why it cannot run</th></tr></thead>
+        <tbody id="engines"><tr><td colspan="5" class="sub">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Console</h2>
+    <p class="sub">A real request to <code class="mono">POST /api/chat/stream</code>. If no engine can serve it, AlphaAI says exactly why.</p>
+    <div class="console" id="chat"></div>
+    <div class="row">
+      <textarea id="prompt" placeholder="Ask AlphaAI… e.g. 'calculate (3.5 ** 2 + 41) / 7' — the calculator tool needs no model."></textarea>
+    </div>
+    <div class="row">
+      <select id="engine"><option value="">Auto-route</option></select>
+      <label class="pill"><input type="checkbox" id="tools" checked /> tools</label>
+      <label class="pill"><input type="checkbox" id="memory" checked /> memory</label>
+      <button class="btn primary" id="send">Send</button>
+      <button class="btn" onclick="clearConsole()">Clear</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="two">
+      <div>
+        <h2>Skills</h2>
+        <p class="sub">Real computation, files, network and engine-backed capabilities.</p>
+        <div class="card" style="overflow:auto"><table><tbody id="skills"><tr><td class="sub">Loading…</td></tr></tbody></table></div>
+      </div>
+      <div>
+        <h2>Tools</h2>
+        <p class="sub">Deny-by-default. A tool shows the exact permission decision AlphaAI applies.</p>
+        <div class="card" style="overflow:auto"><table><tbody id="tools-list"><tr><td class="sub">Loading…</td></tr></tbody></table></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="inner">
+    <p><strong>ALPHA AI</strong> is the system layer: model router, conversation engine, context manager, tool engine, skills, memory, agent orchestrator, API and training foundation.</p>
+    <p id="attribution-long"></p>
+    <p>Vendored components and licenses preserved in this repository: <code class="mono">LICENSE-CODE</code> (MIT, DeepSeek),
+      <code class="mono">LICENSE-MODEL</code> (DeepSeek Model License), <code class="mono">NOTICE</code>, <code class="mono">ATTRIBUTION.md</code>.</p>
+  </div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function write(text, cls) {
+  const box = $("chat");
+  const span = document.createElement("span");
+  span.className = cls || "sys";
+  span.textContent = text;
+  box.appendChild(span);
+  box.scrollTop = box.scrollHeight;
+}
+function clearConsole() { $("chat").textContent = ""; }
+
+async function getJSON(url) {
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function loadMeta() {
+  const [index, attribution] = await Promise.all([getJSON("/api"), getJSON("/api/attribution")]);
+  $("attribution").textContent = attribution.engine;
+  $("attribution-long").textContent = attribution.long;
+}
+
+async function loadHealth() {
+  const health = await getJSON("/api/health");
+  $("stat-engines").textContent = health.engines.registered;
+  $("stat-usable").textContent = health.engines.usable;
+  const states = Object.entries(health.engines.states || {}).map(([k, v]) => `${v} ${k}`).join(" · ");
+  $("stat-engines-d").textContent = states || "registered";
+  $("stat-skills").textContent = health.skills.registered;
+  $("stat-skills-d").textContent = Object.keys(health.skills.categories || {}).length + " categories";
+  $("stat-tools").textContent = health.tools.registered;
+  $("stat-tools-d").textContent = health.tools.permitted + " permitted by policy";
+  $("stat-memory").textContent = health.memory.entries ?? "off";
+  $("hardware").textContent = (health.hardware_lines || []).join("\n");
+}
+
+function stateClass(state) { return "pill " + state; }
+
+async function loadModels() {
+  const payload = await getJSON("/api/models");
+  const body = $("engines");
+  body.innerHTML = "";
+  const select = $("engine");
+  select.innerHTML = '<option value="">Auto-route</option>';
+  payload.models.forEach((model) => {
+    const tr = document.createElement("tr");
+    const status = model.status || {};
+    const caps = (model.capabilities || []).slice(0, 6).join(", ");
+    tr.innerHTML = `
+      <td><strong>${model.display_name || model.id}</strong><div class="sub mono">${model.id}</div>
+          <div class="badge-line">${(model.capabilities || []).map((c) => `<span class="pill">${c}</span>`).join("")}</div></td>
+      <td>${model.engine_name || model.engine}<div class="sub">${model.runtime || ""}</div></td>
+      <td><span class="${stateClass(status.state)}">${status.state}</span>${status.usable ? "" : ""}</td>
+      <td>${model.model_owner}<div class="sub">engine: ${model.engine_owner}</div></td>
+      <td>${(status.detail || "").slice(0, 220)}${status.remediation ? `<div class="sub"><strong>fix:</strong> ${status.remediation}</div>` : ""}</td>`;
+    body.appendChild(tr);
+    if (status.usable) {
+      const option = document.createElement("option");
+      option.value = model.id;
+      option.textContent = model.display_name || model.id;
+      select.appendChild(option);
+    }
+  });
+}
+
+async function loadSkills() {
+  const payload = await getJSON("/api/skills");
+  $("skills").innerHTML = payload.skills.map((skill) => `
+    <tr>
+      <td><strong>${skill.name}</strong><div class="sub mono">${skill.id}</div>
+        <div class="sub">${skill.description}</div></td>
+      <td><span class="pill ${skill.available ? "ready" : "unavailable"}">${skill.available ? "available" : "unavailable"}</span>
+        <div class="sub">${skill.requires_engine ? "needs engine" : "no engine needed"}</div></td>
+    </tr>`).join("");
+}
+
+async function loadTools() {
+  const payload = await getJSON("/api/tools");
+  $("tools-list").innerHTML = payload.tools.map((tool) => `
+    <tr>
+      <td><strong>${tool.name}</strong><div class="sub mono">${tool.id}</div></td>
+      <td><span class="pill ${tool.permissions.allowed ? "ready" : "unavailable"}">${tool.permissions.allowed ? "permitted" : "denied"}</span>
+        <div class="sub">${tool.requires_network ? "network" : ""}${tool.requires_write ? " · write" : ""}</div></td>
+    </tr>`).join("");
+}
+
+async function send() {
+  const message = $("prompt").value.trim();
+  if (!message) return;
+  write("\n› " + message + "\n", "you");
+  $("prompt").value = "";
+  const body = {
+    message,
+    engine_id: $("engine").value || null,
+    use_tools: $("tools").checked,
+    use_memory: $("memory").checked,
+  };
+  try {
+    const res = await fetch("/api/chat/stream?format=sse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok || !res.body) {
+      const payload = await res.json().catch(() => ({}));
+      write((payload.error && (payload.error.message + (payload.error.remediation ? " — " + payload.error.remediation : ""))) || res.statusText, "err");
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop();
+      for (const part of parts) {
+        const line = part.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        const raw = line.slice(6);
+        if (raw === "[DONE]") continue;
+        let event;
+        try { event = JSON.parse(raw); } catch (e) { continue; }
+        if (event.type === "route") write(`[router] ${event.routing.reason}\n`, "sys");
+        if (event.type === "delta") write(event.text, "ai");
+        if (event.type === "tool_call") write(`[tools] ${event.calls.map((c) => c.tool_id).join(", ")}\n`, "sys");
+        if (event.type === "tool_result") write(`[result] ${JSON.stringify(event.result.output).slice(0, 400)}\n`, "sys");
+        if (event.type === "done") write(`\n[${event.engine_id} · ${event.attribution}]\n`, "sys");
+        if (event.type === "error") write(`[error:${event.error.code}] ${event.error.message}${event.error.remediation ? " — " + event.error.remediation : ""}\n`, "err");
+      }
+    }
+  } catch (err) {
+    write("[network error] " + err.message + "\n", "err");
+  }
+}
+
+async function refreshAll() {
+  try {
+    await Promise.all([loadMeta(), loadHealth(), loadModels(), loadSkills(), loadTools()]);
+  } catch (err) {
+    write("[error loading status] " + err.message + "\n", "err");
+  }
+}
+
+$("send").addEventListener("click", send);
+$("prompt").addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) send();
+});
+refreshAll();
+setInterval(loadHealth, 15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+# AlphaAI configuration.
+#
+# AlphaAI performs *local* inference only, so there are no AI provider keys here
+# and there never will be. Every value can be overridden with an ALPHAI_* env var
+# (see docs/ARCHITECTURE.md) so containers can tune a deployment without editing
+# this file.
+#
+# Tool permissions are deny-by-default: a tool only runs when the policy below
+# allows it. Network access, code execution and writes are all off by default.
+
+name = "AlphaAI"
+tagline = "Intelligence, built from the ground up."
+
+[paths]
+# Relative paths resolve against paths.project_root (the repository root).
+models_dir = "models"
+configs_dir = "configs"
+datasets_dir = "datasets"
+tokenizer_dir = "tokenizer"
+checkpoints_dir = "checkpoints"
+training_dir = "training"
+evaluation_dir = "evaluation"
+state_dir = ".alphaai"
+workspace_dir = "workspace"
+log_dir = ".alphaai/logs"
+
+[runtime]
+device = "auto"          # auto | cpu | cuda | mps
+dtype = "auto"           # auto | bf16 | fp16 | fp32 | fp8 | q4_k_m | q8_0
+cpu_threads = 0          # 0 => let the runtime decide
+gpu_layers = -1          # llama.cpp offload; -1 => all layers when a GPU exists
+max_loaded_engines = 1
+allow_model_download = false   # AlphaAI never downloads weights implicitly
+
+[sampling]
+# Generation defaults handed to every engine. Tuned for the small local model
+# AlphaAI runs by default (configs/models/qwen2.5-0.5b-instruct-gguf.json): a
+# 0.5B model at the old 0.6/0.95 defaults was noticeably less reliable on short
+# factual answers, so AlphaAI ships a cooler, more deterministic default.
+# Override per request with `--temperature` / `--max-tokens` or
+# sampling.temperature here.
+temperature = 0.3
+top_p = 0.9
+top_k = 0
+max_tokens = 512
+repetition_penalty = 1.0
+
+[conversation]
+max_history_turns = 24
+context_reserve_tokens = 1024
+tool_loop_limit = 6
+
+[tools]
+enabled = ["*"]
+allow_network = false          # set true (or per-tool below) to allow web.fetch / web.search
+allow_code_execution = false   # required for python.sandbox
+allow_writes = false           # required for file.write
+sandbox_root = "workspace"
+default_timeout_s = 10.0
+max_output_bytes = 65536
+
+# Per-tool permission overrides. Unlisted tools follow the defaults above.
+# [tools.permissions.web-search]
+# allow = true
+# network = true
+# timeout_s = 15.0
+# max_calls_per_run = 4
+
+[skills]
+enabled = ["*"]
+allow_engine_backed = true
+default_timeout_s = 30.0
+
+[engines]
+# Every engine key AlphaAI ships. Add "*" to also allow custom engine keys.
+enabled = [
+  "deepseek",
+  "transformers",
+  "llama_cpp",
+  "llama",
+  "qwen",
+  "kimi",
+  "mistral",
+  "gemma",
+  "alphaai",
+  "qwen_gguf",
+  "deepseek_gguf",
+]
+trust_remote_code = false
+
+# Point an engine at weights that live outside paths.models_dir:
+# [engines.options.qwen2.5-0.5b-instruct]
+# model_path = "/data/checkpoints/qwen2.5-0.5b-instruct"
+
+# Persistent runtime settings for the default local model. The weights are found
+# under paths.models_dir/<model-id>/ (see configs/models/qwen2.5-0.5b-instruct-gguf.json),
+# so nothing machine-specific is hard-coded in source or in this file.
+[engines.options."qwen2.5-0.5b-instruct-gguf"]
+n_ctx = 4096        # context window requested from llama.cpp (model supports 32768)
+cpu_threads = 0     # 0 => runtime.cpu_threads, then the detected core count
+verbose = false     # true => llama.cpp logs the load and every decode step
+
+[routing]
+long_context_threshold_tokens = 16000
+prefer_loaded_engines = true
+
+# The default practical chat model. task_preferences can only *order* engines
+# that already exist in the registry — it never invents a model — and it is how
+# the lightweight local model becomes the default for every task it can serve.
+# Larger engines (deepseek-v3, qwen2.5-7b-instruct, ...) keep their abstractions
+# and take over automatically once their weights and hardware are available.
+[routing.task_preferences]
+general = ["qwen2.5-0.5b-instruct-gguf"]
+coding = ["qwen2.5-0.5b-instruct-gguf"]
+reasoning = ["qwen2.5-0.5b-instruct-gguf"]
+mathematics = ["qwen2.5-0.5b-instruct-gguf"]
+tool_calling = ["qwen2.5-0.5b-instruct-gguf"]
+summarization = ["qwen2.5-0.5b-instruct-gguf"]
+translation = ["qwen2.5-0.5b-instruct-gguf"]
+
+[memory]
+enabled = true
+path = ".alphaai/memory/memory.sqlite3"
+max_entries_per_namespace = 5000
+retrieval_limit = 5
+
+[api]
+host = "0.0.0.0"
+port = 8090
+cors_origins = ["*"]
+redact_paths = true
+enable_dashboard = true
+
+[training]
+default_tokenizer = "tokenizer"
+default_dataset = "alphaai-sample"
+default_experiment = "alphaai-alpha-1"
+checkpoint_keep = 3
+device_batch_size = 1
+gradient_accumulation_steps = 8
+learning_rate = 0.0001
+max_steps = 100
+seed = 1337

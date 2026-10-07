@@ -1,3 +1,10 @@
+# Copyright (c) 2023 DeepSeek
+#
+# Part of the DeepSeek-V3 reference implementation (FP8 -> BF16 weight cast),
+# vendored from https://github.com/deepseek-ai/DeepSeek-V3 under the MIT License
+# (see LICENSE-CODE). AlphaAI references it from docs/ENGINES.md; the code below
+# remains under DeepSeek copyright. See NOTICE and ATTRIBUTION.md.
+
 import os
 import json
 from argparse import ArgumentParser

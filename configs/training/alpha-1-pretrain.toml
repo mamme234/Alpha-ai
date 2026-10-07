@@ -1,0 +1,36 @@
+# AlphaAI pretraining configuration (reference).
+#
+# `alphaai train finetune --config configs/training/alpha-1-pretrain.toml` runs the
+# AlphaAI reference training loop: data -> tokenizer -> optimiser steps -> eval
+# loss -> checkpoint -> model card. It is honest about scale: the reference model
+# below is tiny on purpose so the pipeline is executable anywhere. A production
+# AlphaAI-X run replaces [model] with the full architecture; everything else
+# (datasets, tokenizer, checkpoints, evaluation, model card) stays the same.
+
+name = "alphaai-reference-pretrain"
+
+[model]
+model_name = "AlphaAI-X-reference"
+dim = 96
+n_layers = 2
+n_heads = 4
+block_size = 64
+dropout = 0.0
+# For a production AlphaAI-X pretraining run use something like:
+# dim = 4096, n_layers = 32, n_heads = 32, block_size = 4096
+
+[training]
+max_steps = 40
+batch_size = 4
+gradient_accumulation_steps = 2
+learning_rate = 0.001
+weight_decay = 0.01
+warmup_steps = 2
+eval_every = 10
+checkpoint_every = 10
+seed = 1337
+max_records = 200
+
+[tokens]
+tokenizer = "tokenizer"
+dataset = "alphaai-sample"

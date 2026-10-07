@@ -1,0 +1,36 @@
+# AlphaAI supervised fine-tuning configuration (reference).
+#
+# Same pipeline as pretraining, tuned for instruction data: fewer, shorter steps
+# and a lower learning rate, starting from whatever base checkpoint you have
+# (today: the reference checkpoint the pipeline produces).
+#
+# base_model records what the weights were derived from, so AlphaAI can always
+# state the provenance of a model. For AlphaAI-X that value will be
+# "from scratch"; for an adapter on top of another model it is that model's name
+# and the resulting weights stay under that model's license.
+
+name = "alphaai-reference-sft"
+
+[model]
+model_name = "AlphaAI-X-sft-reference"
+dim = 96
+n_layers = 2
+n_heads = 4
+block_size = 64
+dropout = 0.0
+
+[training]
+max_steps = 30
+batch_size = 4
+gradient_accumulation_steps = 2
+learning_rate = 0.0005
+weight_decay = 0.01
+warmup_steps = 2
+eval_every = 10
+checkpoint_every = 10
+seed = 1337
+max_records = 200
+
+[tokens]
+tokenizer = "tokenizer"
+dataset = "alphaai-sample"

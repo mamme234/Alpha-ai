@@ -1,0 +1,53 @@
+# AlphaAI runtime profile: CUDA host intended for DeepSeek-V3 (FP8).
+#
+# Use it with:  ALPHAI_CONFIG=configs/runtime/cuda-fp8.toml alphaai serve
+#
+# Requirements, checked (never assumed) by AlphaAI at load time:
+#   * Linux + Python 3.10 with torch (CUDA build) and triton installed
+#     (`pip install -r inference/requirements.txt`)
+#   * the DeepSeek-V3 weights converted with `python inference/convert.py`
+#     and placed under models/deepseek-v3/
+#   * enough accelerator memory for the FP8 weights plus the KV cache; AlphaAI
+#     estimates this and refuses to start a partial load
+
+name = "AlphaAI (CUDA / FP8 profile)"
+tagline = "Intelligence, built from the ground up."
+
+[runtime]
+device = "cuda"
+dtype = "fp8"
+cpu_threads = 16
+gpu_layers = -1
+max_loaded_engines = 1
+worker_parallelism = 1
+
+[sampling]
+temperature = 0.7
+top_p = 0.95
+max_tokens = 1024
+
+[routing]
+long_context_threshold_tokens = 16000
+
+[tools]
+allow_network = true
+allow_code_execution = false
+allow_writes = false
+default_timeout_s = 15.0
+max_output_bytes = 131072
+
+[memory]
+enabled = true
+path = ".alphaai/memory/memory.sqlite3"
+max_entries_per_namespace = 20000
+retrieval_limit = 8
+
+[api]
+host = "0.0.0.0"
+port = 8090
+redact_paths = true
+enable_dashboard = true
+
+[engines]
+enabled = ["deepseek", "transformers", "llama_cpp", "llama", "qwen", "kimi", "mistral", "gemma", "alphaai"]
+trust_remote_code = false

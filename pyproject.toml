@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alphaai"
+version = "1.0.0"
+description = "AlphaAI — an open AI system layer: model router, tools, skills, local inference engines and training foundation."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "The AlphaAI Project" }]
+keywords = ["alphaai", "llm", "local-inference", "model-router", "agent", "skills", "tools"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# AlphaAI Core, the API and the skills/tools layer are dependency-light on purpose:
+# they must import and run on any machine, and they never require external AI API keys.
+dependencies = [
+  "tomli>=2.0.1; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.110", "uvicorn>=0.27"]
+tests = ["pytest>=7.4"]
+
+# ---------------------------------------------------------------------------
+# Model runtime extras. AlphaAI never installs or downloads a model on its own:
+# pick the extra that matches the runtime you intend to use locally.
+# ---------------------------------------------------------------------------
+# Torch runtime (DeepSeek-V3 reference engine, PyTorch/Hugging Face engines).
+torch = ["torch>=2.4", "transformers>=4.46", "safetensors>=0.4.5", "numpy>=1.24"]
+# FP8 kernels required by the DeepSeek-V3 fp8 inference path (Linux + CUDA only).
+fp8 = ["torch>=2.4", "triton>=3.0", "transformers>=4.46", "safetensors>=0.4.5"]
+# Quantized GGUF runtime for consumer hardware (the path AlphaAI uses to run a
+# real open-weight model on a CPU-only machine). On a box where building from
+# source is impractical, install the official CPU wheel instead:
+#   pip install llama-cpp-python --extra-index-url \
+#       https://abetlen.github.io/llama-cpp-python/whl/cpu
+llama = ["llama-cpp-python>=0.3.0", "huggingface_hub>=0.23"]
+# Serving runtime data utilities.
+serve = ["fastapi>=0.110", "uvicorn>=0.27", "numpy>=1.24"]
+# Training / fine-tuning stack for AlphaAI-owned weights.
+train = [
+  "torch>=2.4",
+  "transformers>=4.46",
+  "datasets>=2.18",
+  "safetensors>=0.4.5",
+  "numpy>=1.24",
+  "tokenizers>=0.20",
+  "sentencepiece>=0.2.0",
+]
+
+[project.scripts]
+alphaai = "alphaai.cli:main"
+
+[project.urls]
+Documentation = "https://github.com/alphaai-project/AlphaAI#readme"
+Source = "https://github.com/alphaai-project/AlphaAI"
+
+[tool.setuptools]
+packages = [
+  "alphaai",
+  "alphaai.api",
+  "alphaai.config",
+  "alphaai.core",
+  "alphaai.core.skills",
+  "alphaai.core.tools",
+  "alphaai.engines",
+  "alphaai.training",
+]
+
+[tool.setuptools.package-data]
+"alphaai.api" = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
