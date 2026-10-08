@@ -302,6 +302,12 @@ async function loadModels() {
   }
   body.innerHTML = "";
   select.innerHTML = '<option value="">Auto-route</option>';
+  if (!payload.models.length) {
+    // Honest empty state: this API hosts no model metadata of its own. A
+    // gateway deployment proxies the real list from ALPHAI_INFERENCE_URL.
+    body.appendChild(errorRow(5, "No models registered in this deployment — inference comes from ALPHAI_INFERENCE_URL."));
+    return;
+  }
   payload.models.forEach((model) => {
     const tr = document.createElement("tr");
     const status = model.status || {};

@@ -249,6 +249,54 @@ def test_unexpected_errors_are_reported_as_json(config, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
+# the deployed routing and packaging configuration
+# ---------------------------------------------------------------------------
+
+
+def _vercel_config() -> dict:
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    return json.loads((root / "vercel.json").read_text(encoding="utf-8"))
+
+
+def test_vercel_routes_the_api_before_the_frontend_catch_all() -> None:
+    """A /api/* request must never fall through to the static frontend.
+
+    Vercel evaluates the top-level rewrites in order and routes to the first
+    match, so the catch-all has to stay last — otherwise the browser receives
+    the frontend's HTML where it expects API JSON.
+    """
+
+    payload = _vercel_config()
+    services = payload["services"]
+    assert set(services) == {"frontend", "backend"}
+    assert services["backend"]["entrypoint"] == "asgi:app"
+    assert services["backend"]["framework"] == "fastapi"
+    assert services["frontend"]["root"] == "alphaai/api/static/"
+
+    rewrites = payload["rewrites"]
+    assert rewrites[0]["source"] == "/api/(.*)"
+    for source in ("/docs", "/redoc", "/openapi.json"):
+        assert {"source": source, "destination": {"service": "backend"}} in rewrites
+    assert all(rule["destination"]["service"] == "backend" for rule in rewrites[:-1])
+    assert rewrites[-1] == {"source": "/(.*)", "destination": {"service": "frontend"}}
+
+
+def test_backend_service_ships_the_model_metadata() -> None:
+    """The function bundle must contain configs/models/*.json.
+
+    The Python build ships what it can trace from the entrypoint, so without
+    this include /api/models answered an empty list in production even though
+    the metadata is in the repository.
+    """
+
+    include = _vercel_config()["services"]["backend"].get("functions", {})
+    assert include["asgi.py"]["includeFiles"] == "configs/**"
+
+
+# ---------------------------------------------------------------------------
 # the hosting entrypoint (asgi:app)
 # ---------------------------------------------------------------------------
 

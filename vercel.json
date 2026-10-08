@@ -7,7 +7,12 @@
     "backend": {
       "root": ".",
       "framework": "fastapi",
-      "entrypoint": "asgi:app"
+      "entrypoint": "asgi:app",
+      "functions": {
+        "asgi.py": {
+          "includeFiles": "configs/**"
+        }
+      }
     }
   },
   "rewrites": [
