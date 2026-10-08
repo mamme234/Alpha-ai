@@ -170,7 +170,7 @@ browser never makes a cross-origin request and CORS is not exercised at all.
    | `ALPHAI_INFERENCE_TOKEN` | the same shared secret you set on the inference host (optional but recommended) |
    | `ALPHAI_CORS_ORIGINS` | only needed if a browser calls the API from another origin |
 
-3. Deploy. Then verify (section 8) that
+3. Deploy. Then verify (section 7) that
    `GET https://<project>.vercel.app/api/health` reports
    `inference.ready: true` **and** `gateway.reachable: true`.
 
