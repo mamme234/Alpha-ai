@@ -232,6 +232,24 @@ def _apply_env(config: AlphaAIConfig, env: Mapping[str, str]) -> list[str]:
     set_field(config.api, "host", get("ALPHAI_HOST"))
     set_field(config.api, "port", get("ALPHAI_PORT"), int)
     set_field(config.api, "redact_paths", get("ALPHAI_REDACT_PATHS"), bool)
+    set_field(config.api, "max_request_bytes", get("ALPHAI_MAX_REQUEST_BYTES"), int)
+    # Production CORS is configuration, not a wildcard: set the deployed frontend
+    # origin(s) here (comma-separated) instead of editing source.
+    set_list(config.api, "cors_origins", get("ALPHAI_CORS_ORIGINS"))
+    # Remote inference gateway. Setting an inference URL keeps this deployment
+    # stateless (no local model, no writable disk) and forwards inference to a
+    # real AlphaAI server. Both spellings are accepted; the ALPHAI_ one wins.
+    set_field(
+        config.api,
+        "inference_url",
+        get("ALPHAI_INFERENCE_URL") or get("ALPHA_INFERENCE_URL"),
+    )
+    set_field(
+        config.api,
+        "inference_token",
+        get("ALPHAI_INFERENCE_TOKEN") or get("ALPHA_INFERENCE_TOKEN"),
+    )
+    set_field(config.api, "inference_timeout_s", get("ALPHAI_INFERENCE_TIMEOUT_S"), float)
     return applied
 
 

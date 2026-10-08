@@ -171,7 +171,15 @@ class MemoryConfig:
 
 @dataclass(slots=True)
 class ApiConfig:
-    """Unified AlphaAI HTTP API configuration."""
+    """Unified AlphaAI HTTP API configuration.
+
+    When ``inference_url`` is set the API stops loading models locally and
+    forwards every ``/api/*`` request to that AlphaAI inference server instead.
+    That is how a stateless front-end deployment (for example Vercel, which has
+    no persistent disk and cannot keep a model resident) reaches a real local
+    inference host. It is never a client-side or provider API URL: it must point
+    at another ``alphaai serve`` instance.
+    """
 
     host: str = "0.0.0.0"
     port: int = 8090
@@ -180,6 +188,12 @@ class ApiConfig:
     redact_paths: bool = True
     require_tool_permissions: bool = True
     enable_dashboard: bool = True
+    #: Base URL of the AlphaAI inference server (env: ALPHAI_INFERENCE_URL).
+    inference_url: str = ""
+    #: Shared secret the inference server requires (env: ALPHAI_INFERENCE_TOKEN).
+    inference_token: str = ""
+    #: Seconds to wait for the inference server before giving up.
+    inference_timeout_s: float = 300.0
 
 
 @dataclass(slots=True)
@@ -239,6 +253,10 @@ class AlphaAIConfig:
             problems.append("conversation.tool_loop_limit must be >= 1")
         if self.api.port < 1 or self.api.port > 65535:
             problems.append("api.port must be a valid TCP port")
+        if self.api.inference_url and not self.api.inference_url.startswith(("http://", "https://")):
+            problems.append("api.inference_url must be an http(s) URL of an AlphaAI inference server")
+        if self.api.inference_timeout_s <= 0:
+            problems.append("api.inference_timeout_s must be > 0")
         if self.tools.allow_code_execution and not self.tools.sandbox_root:
             problems.append("tools.sandbox_root is required when code execution is enabled")
         for tool_id, perm in self.tools.permissions.items():

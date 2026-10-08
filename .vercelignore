@@ -1,0 +1,14 @@
+# Model weights, local state and caches must never be uploaded to hosting.
+# The FastAPI deployment is stateless: it reaches the real model through
+# ALPHAI_INFERENCE_URL (see docs/DEPLOY.md).
+models/
+.alphaai/
+checkpoints/
+.vly-run/
+.pytest_cache/
+__pycache__/
+*.egg-info/
+*.gguf
+*.safetensors
+*.pt
+*.bin

@@ -67,6 +67,17 @@ class ModelIncompatibleError(AlphaAIError):
     code = "model_incompatible"
 
 
+class InferenceUnreachableError(AlphaAIError):
+    """A gateway deployment cannot reach the AlphaAI inference server.
+
+    Raised by the remote-inference gateway (``api.inference_url``). The gateway
+    never substitutes a local model or a canned answer for an unreachable
+    inference host.
+    """
+
+    code = "inference_unreachable"
+
+
 # ---------------------------------------------------------------------------
 # tools
 # ---------------------------------------------------------------------------

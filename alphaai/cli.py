@@ -417,11 +417,24 @@ def cmd_orchestrate(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    from .api import serve
+    from .api import resolve_bind, resolve_mode, serve
 
-    print(banner(f"serving on {args.host or 'api.host'}:{args.port or 'api.port'}"))
+    # Show the bind this process will really use (explicit flag, then $PORT,
+    # then api.port) instead of the raw flag values.
+    active, gateway_mode = resolve_mode(getattr(args, "config", None))
+    host, port, _level = resolve_bind(
+        args.host,
+        args.port,
+        fallback_host=active.api.host,
+        fallback_port=active.api.port,
+        log_level=args.log_level,
+    )
+    subtitle = f"serving on {host}:{port}"
+    if gateway_mode:
+        subtitle += f" · gateway → {active.api.inference_url}"
+    print(banner(subtitle))
     _print_attribution()
-    serve(getattr(args, "config", None), host=args.host, port=args.port, log_level=args.log_level)
+    serve(active, host=args.host, port=args.port, log_level=args.log_level)
     return 0
 
 
@@ -539,7 +552,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="Run the AlphaAI HTTP API.")
     serve.add_argument("--host")
     serve.add_argument("--port", type=int)
-    serve.add_argument("--log-level", default="info")
+    serve.add_argument(
+        "--log-level",
+        default=None,
+        help="uvicorn log level (defaults to $ALPHAI_LOG_LEVEL, then info).",
+    )
     serve.set_defaults(func=cmd_serve)
 
     train = sub.add_parser("train", help="Training foundation commands.")

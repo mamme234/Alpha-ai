@@ -207,9 +207,25 @@ class AlphaRuntime:
             state = payload["status"]["state"]
             states[state] = states.get(state, 0) + 1
         usable = [engine for engine in engines if engine["status"]["usable"]]
+        # ``ok`` means the API server itself is up. Inference is a *separate*
+        # question: a running server with no loadable model must never be
+        # reported as inference-ready.
+        inference = {
+            "ready": bool(usable),
+            "model_loaded": any(engine["status"]["loaded"] for engine in engines),
+            "model_unavailable": bool(engines) and not usable,
+            "models_registered": len(engines),
+            "usable_models": len(usable),
+            "detail": (
+                f"{len(usable)} model(s) can serve local inference."
+                if usable
+                else "No usable model: AlphaAI cannot generate responses yet."
+            ),
+        }
         return {
             "ok": True,
             "name": self.config.name,
+            "inference": inference,
             "tagline": self.config.tagline,
             "version": self.config.version,
             "config_source": self.config.source,

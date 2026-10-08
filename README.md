@@ -14,7 +14,7 @@ orchestrator, and a training foundation for future AlphaAI-owned weights.
 
 [Architecture](docs/ARCHITECTURE.md) · [Engines](docs/ENGINES.md) ·
 [Tools](docs/TOOLS.md) · [Skills](docs/SKILLS.md) · [Training](docs/TRAINING.md) ·
-[API](docs/API.md)
+[API](docs/API.md) · [Deploying](docs/DEPLOY.md)
 
 </div>
 
@@ -214,7 +214,12 @@ curl -s localhost:8000/api/chat -H 'content-type: application/json' \
   -d '{"message": "hello"}'
 ```
 
-Full endpoint list in [`docs/API.md`](docs/API.md).
+Full endpoint list in [`docs/API.md`](docs/API.md). The dashboard served at `/`
+uses these same relative paths, so a hosted deployment can route `/api/*` to the
+API and everything else to the static frontend with no client-side hostname.
+When the API runs on a host without a persistent disk, set
+`ALPHAI_INFERENCE_URL` to a real `alphaai serve` instance: the API then forwards
+inference instead of loading weights locally (see [`docs/DEPLOY.md`](docs/DEPLOY.md)).
 
 ## Testing
 

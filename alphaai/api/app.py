@@ -19,6 +19,10 @@ endpoint                      purpose
 If no engine can serve a request the API returns a structured error
 (``engine_unavailable`` / ``no_suitable_model``) with the remediation AlphaAI
 computed. There is no fallback answer and no upstream AI provider.
+
+When ``api.inference_url`` is set (``$ALPHAI_INFERENCE_URL``) the app runs in
+*gateway* mode: it loads no model of its own and forwards ``/api/*`` to a
+separate, always-on AlphaAI inference server. See :mod:`alphaai.api.gateway`.
 """
 
 from __future__ import annotations
@@ -51,6 +55,7 @@ from ..config.schema import AlphaAIConfig
 from ..core.errors import AlphaAIError
 from ..core.runtime import AlphaRuntime
 from ..version import CORE_INTERFACE_VERSION, __version__
+from .gateway import configure_gateway, inference_host, normalize_inference_url
 
 logger = logging.getLogger("alphaai.api")
 
@@ -70,6 +75,7 @@ STATUS_BY_CODE = {
     "skill_timeout": 504,
     "engine_unavailable": 503,
     "engine_load_failed": 503,
+    "inference_unreachable": 503,
     "generation_failed": 502,
     "no_suitable_model": 503,
     "model_incompatible": 409,
@@ -138,16 +144,74 @@ def _json_safe(value: Any) -> Any:
 # ---------------------------------------------------------------------------
 # application factory
 # ---------------------------------------------------------------------------
+def dashboard_response(*, enabled: bool = True) -> Any:
+    """The AlphaAI dashboard page — the front end this API ships with."""
+
+    if not enabled:
+        return JSONResponse(
+            {
+                "ok": True,
+                "name": NAME,
+                "version": __version__,
+                "detail": "AlphaAI dashboard is disabled (api.enable_dashboard = false).",
+            }
+        )
+    index = STATIC_DIR / "index.html"
+    if not index.exists():  # pragma: no cover - packaging problem
+        return JSONResponse(
+            {"ok": False, "error": {"code": "dashboard_missing", "message": str(index)}}
+        )
+    return HTMLResponse(index.read_text(encoding="utf-8"))
+
+
 def create_app(
     config: AlphaAIConfig | str | None = None,
     *,
     runtime: AlphaRuntime | None = None,
     project_root: str | None = None,
+    inference_url: str | None = None,
 ) -> FastAPI:
-    """Build the AlphaAI FastAPI application."""
+    """Build the AlphaAI FastAPI application.
+
+    ``inference_url`` (default: ``api.inference_url``, i.e.
+    ``$ALPHAI_INFERENCE_URL``) switches the app into gateway mode: it forwards
+    ``/api/*`` to a separate, always-on AlphaAI inference server instead of
+    loading a model on this host.
+    """
+
+    # Resolve the effective config before anything else: CORS, the request-size
+    # limit and gateway mode all follow configuration (configs/alphaai.toml plus
+    # the ALPHAI_* environment overrides) even when the caller only passed a
+    # path. A production deploy must never silently fall back to a ``*`` origin.
+    active_config = config if isinstance(config, AlphaAIConfig) else None
+    if active_config is None:
+        from ..config.loader import load_config
+
+        try:
+            active_config = load_config(
+                config if isinstance(config, (str, Path)) else None,
+                project_root=project_root,
+            )
+        except Exception:  # noqa: BLE001 - the API still boots and reports the failure
+            logger.warning("could not load config for CORS/limits; using defaults", exc_info=True)
+            active_config = None
+    api_config = active_config.api if active_config else None
+    gateway_base = normalize_inference_url(
+        inference_url if inference_url is not None else (api_config.inference_url if api_config else "")
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        if gateway_base:
+            # Gateway mode owns no model and touches no disk: every request is
+            # served by the inference server behind ALPHAI_INFERENCE_URL.
+            logger.info(
+                "%s HTTP API ready in gateway mode -> %s", NAME, inference_host(gateway_base)
+            )
+            for line in attribution_lines():
+                logger.info("%s", line)
+            yield
+            return
         app.state.runtime = runtime or AlphaRuntime.create(
             config, project_root=project_root, create_dirs=True
         )
@@ -165,16 +229,58 @@ def create_app(
         version=__version__,
         description=DESCRIPTION,
         lifespan=lifespan,
+        # In gateway mode the inference server owns the API schema, so the
+        # gateway proxies its /docs and /openapi.json instead of documenting
+        # the pass-through route.
+        docs_url=None if gateway_base else "/docs",
+        redoc_url=None if gateway_base else "/redoc",
+        openapi_url=None if gateway_base else "/openapi.json",
     )
 
-    active_config = config if isinstance(config, AlphaAIConfig) else None
     origins = list(active_config.api.cors_origins) if active_config else ["*"]
+    max_request_bytes = active_config.api.max_request_bytes if active_config else 1_048_576
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def _enforce_body_limit(request: Request, call_next):
+        """Reject oversized payloads before they reach the chat/tool handlers."""
+
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > max_request_bytes:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "request_too_large",
+                        "message": f"Request body exceeds api.max_request_bytes ({max_request_bytes}).",
+                        "remediation": "Send a smaller payload or raise api.max_request_bytes.",
+                    },
+                },
+                status_code=413,
+            )
+        return await call_next(request)
+
+    if gateway_base:
+        # Remote-inference deployment: the public API surface below is served by
+        # the inference server, not by this process.
+        if origins == ["*"]:
+            logger.warning(
+                "gateway mode is serving CORS origin '*' - set ALPHAI_CORS_ORIGINS to "
+                "the deployed frontend origin (same-origin routing needs no wildcard)"
+            )
+        configure_gateway(
+            app,
+            base_url=gateway_base,
+            token=api_config.inference_token if api_config else "",
+            timeout_s=api_config.inference_timeout_s if api_config else 300.0,
+            dashboard=api_config.enable_dashboard if api_config else True,
+        )
+        return app
 
     def get_runtime(request: Request) -> AlphaRuntime:
         return request.app.state.runtime
@@ -424,19 +530,7 @@ def create_app(
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def dashboard(request: Request) -> Any:
         runtime_state = get_runtime(request)
-        if not runtime_state.config.api.enable_dashboard:
-            return JSONResponse(
-                {
-                    "ok": True,
-                    "name": NAME,
-                    "version": __version__,
-                    "detail": "AlphaAI dashboard is disabled (api.enable_dashboard = false).",
-                }
-            )
-        index = STATIC_DIR / "index.html"
-        if not index.exists():  # pragma: no cover - packaging problem
-            return JSONResponse({"ok": False, "error": {"code": "dashboard_missing", "message": str(index)}})
-        return index.read_text(encoding="utf-8")
+        return dashboard_response(enabled=runtime_state.config.api.enable_dashboard)
 
     @app.exception_handler(AlphaAIError)
     async def alphaai_error_handler(_request: Request, exc: AlphaAIError) -> JSONResponse:

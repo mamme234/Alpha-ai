@@ -1,0 +1,10 @@
+# Production dependencies for the AlphaAI FastAPI service that managed hosting
+# (Vercel Services: `backend`, entrypoint `asgi:app`) installs.
+#
+# Inference dependencies are deliberately absent: llama-cpp-python, torch and
+# the Qwen GGUF weights cannot run on a serverless platform (no persistent disk,
+# 2-4 GB memory, scale-to-zero). They are installed on the real inference host
+# instead — see deploy/Dockerfile — and this deployment reaches it through
+# ALPHAI_INFERENCE_URL.
+fastapi>=0.110
+uvicorn>=0.27
