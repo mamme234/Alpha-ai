@@ -171,6 +171,24 @@ def test_invalid_platform_port_is_reported_not_ignored() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_models_are_empty_rather_than_invented_without_metadata(tmp_path) -> None:
+    """A host with no model metadata reports no models, never a plausible list.
+
+    The deployed function ships AlphaAI's Python modules; the model metadata
+    and the weights belong to the inference host, which serves the real list
+    through ``ALPHAI_INFERENCE_URL``.
+    """
+
+    root = tmp_path / "no-metadata"
+    root.mkdir()
+    config = load_config(project_root=str(root), env={})
+
+    with TestClient(create_app(config)) as client:
+        payload = client.get("/api/models").json()
+
+    assert payload == {"ok": True, "count": 0, "usable": 0, "models": []}
+
+
 def test_read_only_project_root_still_serves_json_health(tmp_path) -> None:
     """A host that cannot hold AlphaAI's state must still answer with JSON.
 
@@ -282,18 +300,6 @@ def test_vercel_routes_the_api_before_the_frontend_catch_all() -> None:
         assert {"source": source, "destination": {"service": "backend"}} in rewrites
     assert all(rule["destination"]["service"] == "backend" for rule in rewrites[:-1])
     assert rewrites[-1] == {"source": "/(.*)", "destination": {"service": "frontend"}}
-
-
-def test_backend_service_ships_the_model_metadata() -> None:
-    """The function bundle must contain configs/models/*.json.
-
-    The Python build ships what it can trace from the entrypoint, so without
-    this include /api/models answered an empty list in production even though
-    the metadata is in the repository.
-    """
-
-    include = _vercel_config()["services"]["backend"].get("functions", {})
-    assert include["asgi.py"]["includeFiles"] == "configs/**"
 
 
 # ---------------------------------------------------------------------------

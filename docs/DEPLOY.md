@@ -225,6 +225,14 @@ own structured JSON:
   `pyproject.toml` both list FastAPI and uvicorn, because a platform may build
   from either manifest and `asgi:app` imports FastAPI at module load. Neither
   file includes llama.cpp, torch or weights.
+* **The function ships AlphaAI's Python modules, not the model catalogue.** The
+  Python build bundles what the entrypoint reaches, so `configs/models/*.json`
+  is *not* part of the deployed function — the model metadata and the weights
+  belong to the inference host. Until `ALPHAI_INFERENCE_URL` is set, the
+  deployed API therefore reports an empty model list (`{"count": 0,
+  "models": []}`) and `inference.ready: false`, and the dashboard renders that
+  emptiness as a stated fact instead of an empty table. With the variable set,
+  `/api/models` is the inference server's real list, statuses included.
 * **Real inference only ever comes from `ALPHAI_INFERENCE_URL`.** Without it the
   backend serves the API surface (health, models, skills, tools, runtime,
   config, attribution) with inference reported unavailable; with it, `api/*` is
