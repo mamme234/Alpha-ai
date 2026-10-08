@@ -52,7 +52,7 @@ from ..branding import (
 )
 from ..config.loader import public_config_view
 from ..config.schema import AlphaAIConfig
-from ..core.errors import AlphaAIError
+from ..core.errors import AlphaAIError, RuntimeUnavailableError
 from ..core.runtime import AlphaRuntime
 from ..version import CORE_INTERFACE_VERSION, __version__
 from .gateway import configure_gateway, inference_host, normalize_inference_url
@@ -76,6 +76,7 @@ STATUS_BY_CODE = {
     "engine_unavailable": 503,
     "engine_load_failed": 503,
     "inference_unreachable": 503,
+    "runtime_unavailable": 503,
     "generation_failed": 502,
     "no_suitable_model": 503,
     "model_incompatible": 409,
@@ -164,6 +165,42 @@ def dashboard_response(*, enabled: bool = True) -> Any:
     return HTMLResponse(index.read_text(encoding="utf-8"))
 
 
+def local_runtime(
+    config: AlphaAIConfig | str | None = None,
+    *,
+    project_root: str | None = None,
+) -> AlphaRuntime:
+    """Build the full local AlphaAI runtime, tolerating a read-only code root.
+
+    A managed host (serverless platforms mount everything except a temp
+    directory read-only) cannot keep AlphaAI's volatile directories next to the
+    code. Rather than failing every request, those directories move to a
+    writable location — see :func:`alphaai.config.loader.relocate_volatile_paths`
+    — and the API keeps answering with the machine's *real* state: no engine is
+    reported as usable until weights and a runtime actually exist, and
+    ``ALPHAI_INFERENCE_URL`` points inference at the server that owns them.
+    """
+
+    from ..config.loader import load_config, relocate_volatile_paths, resolve_paths
+
+    active = config if isinstance(config, AlphaAIConfig) else load_config(
+        config, project_root=project_root
+    )
+    try:
+        resolve_paths(active, create=True)
+    except OSError as exc:
+        moved = relocate_volatile_paths(active)
+        logger.warning(
+            "%s: %s is not writable (%s); moving runtime state to %s",
+            NAME,
+            active.paths.project_root,
+            exc,
+            moved.get("paths.state_dir", "a temporary directory"),
+        )
+        resolve_paths(active, create=True)
+    return AlphaRuntime.create(active)
+
+
 def create_app(
     config: AlphaAIConfig | str | None = None,
     *,
@@ -212,9 +249,14 @@ def create_app(
                 logger.info("%s", line)
             yield
             return
-        app.state.runtime = runtime or AlphaRuntime.create(
-            config, project_root=project_root, create_dirs=True
-        )
+        try:
+            app.state.runtime = runtime or local_runtime(config, project_root=project_root)
+        except Exception as exc:  # noqa: BLE001 - the API must still answer in JSON
+            # A runtime that cannot start is a real failure, but it must never
+            # turn the API into a hosting platform's HTML error page: every
+            # request then reports it as a structured 503 ("runtime_unavailable").
+            logger.error("%s runtime could not start: %s", NAME, exc, exc_info=True)
+            app.state.runtime = None
         logger.info("%s HTTP API ready", NAME)
         for line in attribution_lines():
             logger.info("%s", line)
@@ -265,6 +307,40 @@ def create_app(
             )
         return await call_next(request)
 
+    @app.middleware("http")
+    async def _json_errors(request: Request, call_next):
+        """Report an unexpected failure as JSON, never as an HTML error page.
+
+        A hosting platform replaces a crashed function with a page of its own,
+        which a JSON client cannot read. The API therefore answers an
+        unhandled exception with the same structured error shape as every other
+        failure, so a deployment problem is visible and machine-readable.
+        """
+
+        try:
+            return await call_next(request)
+        except AlphaAIError as exc:
+            return JSONResponse(
+                {"ok": False, "error": _json_safe(exc.to_dict())},
+                status_code=STATUS_BY_CODE.get(exc.code, 500),
+            )
+        except Exception as exc:  # noqa: BLE001 - see the docstring
+            logger.exception("unhandled error in %s %s", request.method, request.url.path)
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "internal_error",
+                        "message": f"{type(exc).__name__}: {exc}",
+                        "remediation": (
+                            "This is an AlphaAI failure, not a missing model. The traceback "
+                            "for this request is in the server log."
+                        ),
+                    },
+                },
+                status_code=500,
+            )
+
     if gateway_base:
         # Remote-inference deployment: the public API surface below is served by
         # the inference server, not by this process.
@@ -283,7 +359,16 @@ def create_app(
         return app
 
     def get_runtime(request: Request) -> AlphaRuntime:
-        return request.app.state.runtime
+        active = getattr(request.app.state, "runtime", None)
+        if active is None:
+            raise RuntimeUnavailableError(
+                "The AlphaAI runtime is not available in this process.",
+                remediation=(
+                    "Check the server log for the startup error (usually a filesystem or "
+                    "configuration problem) and restart the service."
+                ),
+            )
+        return active
 
     def error_response(exc: AlphaAIError) -> JSONResponse:
         payload = {"ok": False, "error": _json_safe(exc.to_dict())}

@@ -15,7 +15,9 @@ inference needs none.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import tempfile
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -36,7 +38,15 @@ from .schema import (
     TrainingConfigPaths,
 )
 
+logger = logging.getLogger("alphaai.config")
+
 CONFIG_ENV_VAR = "ALPHAI_CONFIG"
+
+#: Directories AlphaAI writes to at runtime (as opposed to code, configs and
+#: weights). On a deployment whose project root is read-only these move to a
+#: writable location — see :func:`relocate_volatile_paths`.
+VOLATILE_PATH_ATTRS = ("state_dir", "log_dir", "workspace_dir")
+
 DEFAULT_CONFIG_PATHS = (
     "configs/alphaai.toml",
     "configs/alphaai.json",
@@ -293,11 +303,56 @@ def resolve_paths(config: AlphaAIConfig, *, create: bool = False) -> AlphaAIConf
             perm.root = _resolve_path(root, perm.root)
 
     if create:
-        for attr in ("state_dir", "log_dir", "workspace_dir", "models_dir"):
+        # Runtime state, logs and the tool sandbox must exist: AlphaAI writes to
+        # them. A missing models directory is not fatal (weights are installed
+        # separately, and a stateless deployment mounts the code read-only), so
+        # it is created on a best-effort basis instead of failing the caller.
+        for attr in VOLATILE_PATH_ATTRS:
             Path(getattr(config.paths, attr)).mkdir(parents=True, exist_ok=True)
         if config.memory.enabled:
             Path(config.memory.path).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            Path(config.paths.models_dir).mkdir(parents=True, exist_ok=True)
+        except OSError as exc:  # pragma: no cover - depends on the host filesystem
+            logger.debug(
+                "could not create models_dir %s (%s); weights stay unavailable",
+                config.paths.models_dir,
+                exc,
+            )
     return config
+
+
+def relocate_volatile_paths(
+    config: AlphaAIConfig,
+    *,
+    base: str | os.PathLike[str] | None = None,
+) -> dict[str, str]:
+    """Move the directories AlphaAI writes to under a writable location.
+
+    Managed hosting that mounts the project read-only (a serverless platform
+    keeps only a temp directory writable) cannot hold memory, tool output or
+    logs next to the code. Only those *volatile* directories move — the code,
+    the configs and the model directory stay exactly where they are — so the API
+    can still report the real state of the machine and of inference instead of
+    dying on its first write. Nothing else about the runtime changes: the real
+    model still has to live on a host with persistent storage.
+
+    Returns the mapping of what moved, for logging.
+    """
+
+    home = Path(base).expanduser() if base is not None else Path(tempfile.gettempdir()) / "alphaai"
+    names = {"state_dir": "state", "log_dir": "logs", "workspace_dir": "workspace"}
+    moved: dict[str, str] = {}
+    for attr in VOLATILE_PATH_ATTRS:
+        target = home / names[attr]
+        setattr(config.paths, attr, str(target))
+        moved[f"paths.{attr}"] = str(target)
+    if config.memory.enabled:
+        config.memory.path = str(home / "state" / Path(config.memory.path).name)
+        moved["memory.path"] = config.memory.path
+    config.tools.sandbox_root = str(home / "workspace")
+    moved["tools.sandbox_root"] = config.tools.sandbox_root
+    return moved
 
 
 def load_config(

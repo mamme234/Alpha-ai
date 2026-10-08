@@ -20,10 +20,18 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-# AlphaAI Core, the API and the skills/tools layer are dependency-light on purpose:
-# they must import and run on any machine, and they never require external AI API keys.
+# AlphaAI Core and the skills/tools layer are dependency-light on purpose: they
+# must import and run on any machine, and they never require external AI API keys.
+#
+# The HTTP API is part of the deployed surface though: managed hosting installs
+# this project (from pyproject.toml or requirements.txt) and then imports
+# `asgi:app`, which imports FastAPI at module load. Declaring the two API
+# runtime dependencies here as well as in the `api` extra is what keeps the
+# deployed function importable no matter which manifest the platform picks.
 dependencies = [
   "tomli>=2.0.1; python_version < '3.11'",
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +71,11 @@ alphaai = "alphaai.cli:main"
 [project.urls]
 Documentation = "https://github.com/alphaai-project/AlphaAI#readme"
 Source = "https://github.com/alphaai-project/AlphaAI"
+
+[tool.vercel]
+# The ASGI application managed hosting loads for the `backend` service
+# (vercel.json: "entrypoint": "asgi:app"). Module `asgi`, variable `app`.
+entrypoint = "asgi:app"
 
 [tool.setuptools]
 packages = [

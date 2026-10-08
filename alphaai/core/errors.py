@@ -67,6 +67,17 @@ class ModelIncompatibleError(AlphaAIError):
     code = "model_incompatible"
 
 
+class RuntimeUnavailableError(AlphaAIError):
+    """The AlphaAI runtime itself could not start, so no request can be served.
+
+    Raised by the HTTP API when the runtime failed to build (for example on a
+    host whose filesystem cannot hold AlphaAI's state at all). The API reports
+    the failure as JSON instead of returning a platform error page.
+    """
+
+    code = "runtime_unavailable"
+
+
 class InferenceUnreachableError(AlphaAIError):
     """A gateway deployment cannot reach the AlphaAI inference server.
 

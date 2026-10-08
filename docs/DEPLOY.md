@@ -200,6 +200,36 @@ through `ALPHAI_INFERENCE_URL`. If a future deployment does try to host inferenc
 on Vercel, it must show `inference.ready: true` from a real generation before
 being called ready — the health payload exists to make that impossible to fake.
 
+### What the deployed backend guarantees
+
+Managed hosting fails loudly and unhelpfully: a function that crashes while
+starting is replaced by the platform's own HTML error page, which no JSON client
+can read. The backend is therefore built so that a failure is always the API's
+own structured JSON:
+
+* **The entrypoint never dies silently.** `asgi.py` builds the app and, if that
+  fails (missing dependency, invalid `ALPHAI_INFERENCE_URL`, packaging mistake),
+  serves the failure itself as `application/json` with the code
+  `startup_failed`, the exception and its traceback in `error.details`.
+* **An unhandled error is JSON too.** The app converts any unexpected exception
+  into `{"ok": false, "error": {"code": "internal_error", ...}}` with
+  `Content-Type: application/json` instead of HTML.
+* **A read-only project root does not break the API.** Serverless hosts mount
+  the deployment read-only. AlphaAI's *volatile* directories (runtime state,
+  logs, the tool sandbox) then move to the platform's writable temp directory —
+  see `alphaai/config/loader.py:relocate_volatile_paths` — while the code,
+  configs and weights stay where they are. The API keeps reporting the machine's
+  real state: with no weights and no llama.cpp on this host, every engine is
+  honestly `unavailable`, and `inference.ready` is `false`.
+* **Dependencies are declared twice on purpose.** `requirements.txt` and
+  `pyproject.toml` both list FastAPI and uvicorn, because a platform may build
+  from either manifest and `asgi:app` imports FastAPI at module load. Neither
+  file includes llama.cpp, torch or weights.
+* **Real inference only ever comes from `ALPHAI_INFERENCE_URL`.** Without it the
+  backend serves the API surface (health, models, skills, tools, runtime,
+  config, attribution) with inference reported unavailable; with it, `api/*` is
+  forwarded to the real inference server. No endpoint fabricates an answer.
+
 ## 6. Health semantics
 
 `GET /api/health` separates “the server is up” from “inference is ready”:
@@ -262,6 +292,31 @@ curl -sN -X POST "$API/api/chat/stream?format=ndjson" \
   -H 'Content-Type: application/json' \
   -d '{"message": "Count to three."}'
 ```
+
+Routing and content type — every one of these must answer `application/json`,
+never `text/html` and never a platform error page:
+
+```bash
+for path in /api/health /api/models /api/skills /api/tools /api/runtime \
+            /api/config /api/attribution /openapi.json; do
+  printf '%-20s ' "$path"
+  curl -s -o /dev/null -w '%{http_code} %{content_type}\n' "$API$path"
+done
+```
+
+If a path answers `500 text/plain` (or `FUNCTION_INVOCATION_FAILED`), the
+backend service did not start. Read the JSON error body first — a
+`startup_failed` payload carries the exception and traceback — then the
+function logs of that deployment. Two conditions make it start cleanly:
+
+1. the project framework is **“Services”** (otherwise `services` is ignored), and
+2. the `backend` service can import `asgi:app`, which means FastAPI and uvicorn
+   are installed from `requirements.txt` / `pyproject.toml`.
+
+`/api/chat` and `/api/chat/stream` answer `503` with
+`{"error": {"code": "inference_unreachable"}}` until a real inference server is
+reachable through `ALPHAI_INFERENCE_URL`. That is the honest answer, not a
+failure of the deployment: the gateway never invents text.
 
 Required endpoints (all already implemented — nothing was recreated):
 

@@ -201,19 +201,77 @@ function write(text, cls) {
 }
 function clearConsole() { $("chat").textContent = ""; }
 
+// Every status panel below renders what the API actually returned. A failure is
+// shown as the failure it is (with the server's own message); nothing is
+// presented as data, and a panel never stays on "loading" once the request is done.
+function errorText(err) {
+  return err && err.message ? err.message : String(err);
+}
+
+function apiProblem(payload) {
+  return payload && payload.error ? payload.error : null;
+}
+
+function problemMessage(problem) {
+  return problem.message + (problem.remediation ? " — " + problem.remediation : "");
+}
+
+function errorRow(cellCount, message) {
+  const tr = document.createElement("tr");
+  const td = document.createElement("td");
+  td.colSpan = cellCount;
+  td.className = "sub";
+  td.textContent = message;
+  tr.appendChild(td);
+  return tr;
+}
+
 async function getJSON(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const type = res.headers.get("content-type") || "";
+  if (!type.includes("application/json")) {
+    // A hosting platform answers a crashed function with its own page. Report
+    // that verbatim instead of trying to read it as API data.
+    const text = await res.text();
+    const firstLine = text.trim().split("\n").find((line) => line.trim()) || "";
+    throw new Error(`${url} returned HTTP ${res.status} ${type || "without a content type"} instead of JSON${firstLine ? ": " + firstLine.slice(0, 200) : ""}`);
+  }
   return res.json();
 }
 
 async function loadMeta() {
-  const [index, attribution] = await Promise.all([getJSON("/api"), getJSON("/api/attribution")]);
-  $("attribution").textContent = attribution.engine;
-  $("attribution-long").textContent = attribution.long;
+  try {
+    const [index, attribution] = await Promise.all([getJSON("/api"), getJSON("/api/attribution")]);
+    $("attribution").textContent = attribution.engine;
+    $("attribution-long").textContent = attribution.long;
+  } catch (err) {
+    $("attribution").textContent = "attribution unavailable — " + errorText(err);
+  }
+}
+
+function showStatusError(message) {
+  for (const id of ["stat-engines", "stat-usable", "stat-skills", "stat-tools", "stat-memory"]) {
+    $(id).textContent = "—";
+  }
+  $("stat-engines-d").textContent = message;
+  $("stat-skills-d").textContent = "";
+  $("stat-tools-d").textContent = "";
 }
 
 async function loadHealth() {
-  const health = await getJSON("/api/health");
+  let payload;
+  try {
+    payload = await getJSON("/api/health");
+  } catch (err) {
+    showStatusError(errorText(err));
+    return;
+  }
+  const problem = apiProblem(payload);
+  if (problem) {
+    showStatusError(problemMessage(problem));
+    return;
+  }
+  const health = payload;
   $("stat-engines").textContent = health.engines.registered;
   $("stat-usable").textContent = health.engines.usable;
   const states = Object.entries(health.engines.states || {}).map(([k, v]) => `${v} ${k}`).join(" · ");
@@ -229,10 +287,20 @@ async function loadHealth() {
 function stateClass(state) { return "pill " + state; }
 
 async function loadModels() {
-  const payload = await getJSON("/api/models");
   const body = $("engines");
-  body.innerHTML = "";
   const select = $("engine");
+  let payload;
+  try {
+    payload = await getJSON("/api/models");
+    const problem = apiProblem(payload);
+    if (problem) throw new Error(problemMessage(problem));
+  } catch (err) {
+    body.innerHTML = "";
+    body.appendChild(errorRow(5, "unavailable — " + errorText(err)));
+    select.innerHTML = '<option value="">inference unavailable</option>';
+    return;
+  }
+  body.innerHTML = "";
   select.innerHTML = '<option value="">Auto-route</option>';
   payload.models.forEach((model) => {
     const tr = document.createElement("tr");
@@ -256,8 +324,18 @@ async function loadModels() {
 }
 
 async function loadSkills() {
-  const payload = await getJSON("/api/skills");
-  $("skills").innerHTML = payload.skills.map((skill) => `
+  const table = $("skills");
+  let payload;
+  try {
+    payload = await getJSON("/api/skills");
+    const problem = apiProblem(payload);
+    if (problem) throw new Error(problemMessage(problem));
+  } catch (err) {
+    table.innerHTML = "";
+    table.appendChild(errorRow(2, "unavailable — " + errorText(err)));
+    return;
+  }
+  table.innerHTML = payload.skills.map((skill) => `
     <tr>
       <td><strong>${skill.name}</strong><div class="sub mono">${skill.id}</div>
         <div class="sub">${skill.description}</div></td>
@@ -267,8 +345,18 @@ async function loadSkills() {
 }
 
 async function loadTools() {
-  const payload = await getJSON("/api/tools");
-  $("tools-list").innerHTML = payload.tools.map((tool) => `
+  const table = $("tools-list");
+  let payload;
+  try {
+    payload = await getJSON("/api/tools");
+    const problem = apiProblem(payload);
+    if (problem) throw new Error(problemMessage(problem));
+  } catch (err) {
+    table.innerHTML = "";
+    table.appendChild(errorRow(2, "unavailable — " + errorText(err)));
+    return;
+  }
+  table.innerHTML = payload.tools.map((tool) => `
     <tr>
       <td><strong>${tool.name}</strong><div class="sub mono">${tool.id}</div></td>
       <td><span class="pill ${tool.permissions.allowed ? "ready" : "unavailable"}">${tool.permissions.allowed ? "permitted" : "denied"}</span>
@@ -328,10 +416,11 @@ async function send() {
 }
 
 async function refreshAll() {
-  try {
-    await Promise.all([loadMeta(), loadHealth(), loadModels(), loadSkills(), loadTools()]);
-  } catch (err) {
-    write("[error loading status] " + err.message + "\n", "err");
+  // Each panel reports its own outcome: one failing endpoint never leaves the
+  // others on "loading" and never hides the reason.
+  const results = await Promise.allSettled([loadMeta(), loadHealth(), loadModels(), loadSkills(), loadTools()]);
+  for (const result of results) {
+    if (result.status === "rejected") write("[error loading status] " + errorText(result.reason) + "\n", "err");
   }
 }
 
@@ -340,7 +429,7 @@ $("prompt").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) send();
 });
 refreshAll();
-setInterval(loadHealth, 15000);
+setInterval(() => { loadHealth().catch((err) => showStatusError(errorText(err))); }, 15000);
 </script>
 </body>
 </html>

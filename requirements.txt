@@ -1,6 +1,10 @@
 # Production dependencies for the AlphaAI FastAPI service that managed hosting
 # (Vercel Services: `backend`, entrypoint `asgi:app`) installs.
 #
+# The same two packages are declared in pyproject.toml [project.dependencies]: a
+# platform may build from either manifest, and `asgi:app` imports FastAPI at
+# module load, so a missing entry here or there breaks every endpoint at once.
+#
 # Inference dependencies are deliberately absent: llama-cpp-python, torch and
 # the Qwen GGUF weights cannot run on a serverless platform (no persistent disk,
 # 2-4 GB memory, scale-to-zero). They are installed on the real inference host

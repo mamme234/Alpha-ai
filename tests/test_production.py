@@ -164,3 +164,114 @@ def test_configured_port_is_used_when_the_platform_sets_none() -> None:
 def test_invalid_platform_port_is_reported_not_ignored() -> None:
     with pytest.raises(ValueError, match="Invalid PORT"):
         resolve_bind(env={"PORT": "not-a-port"})
+
+
+# ---------------------------------------------------------------------------
+# hosting the API on a read-only project root
+# ---------------------------------------------------------------------------
+
+
+def test_read_only_project_root_still_serves_json_health(tmp_path) -> None:
+    """A host that cannot hold AlphaAI's state must still answer with JSON.
+
+    Serverless hosting mounts the project read-only. Before this, the first
+    request died creating the state directory and the platform replaced the
+    answer with its own error page, so no client could read the API at all.
+    """
+
+    root = tmp_path / "readonly"
+    root.mkdir()
+    # A *file* where the state directory belongs: every mkdir below it fails.
+    (root / ".alphaai").write_text("occupied", encoding="utf-8")
+    config = load_config(project_root=str(root), env={})
+
+    with TestClient(create_app(config)) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    payload = response.json()
+    assert payload["ok"] is True
+    # Inference is reported as unavailable — never invented.
+    assert payload["inference"]["ready"] is False
+    assert "gateway" not in payload
+
+
+def test_relocating_volatile_paths_leaves_code_and_weights_alone(tmp_path) -> None:
+    from alphaai.config.loader import relocate_volatile_paths, resolve_paths
+
+    config = load_config(project_root=str(tmp_path), env={})
+    resolve_paths(config)
+    before_models = config.paths.models_dir
+    before_configs = config.paths.configs_dir
+
+    moved = relocate_volatile_paths(config, base=tmp_path / "writable")
+
+    assert moved["paths.state_dir"] == str(tmp_path / "writable" / "state")
+    assert config.paths.log_dir == str(tmp_path / "writable" / "logs")
+    assert config.paths.workspace_dir == str(tmp_path / "writable" / "workspace")
+    assert config.memory.path == str(tmp_path / "writable" / "state" / "memory.sqlite3")
+    assert config.tools.sandbox_root == str(tmp_path / "writable" / "workspace")
+    # Code, configs and weights are read-only inputs: they never move.
+    assert config.paths.models_dir == before_models
+    assert config.paths.configs_dir == before_configs
+
+
+def test_volatile_paths_are_created_after_relocation(tmp_path) -> None:
+    from alphaai.config.loader import relocate_volatile_paths, resolve_paths
+
+    config = load_config(project_root=str(tmp_path), env={})
+    relocate_volatile_paths(config, base=tmp_path / "writable")
+    resolve_paths(config, create=True)
+
+    assert (tmp_path / "writable" / "state").is_dir()
+    assert (tmp_path / "writable" / "logs").is_dir()
+    assert (tmp_path / "writable" / "workspace").is_dir()
+
+
+def test_unexpected_errors_are_reported_as_json(config, monkeypatch) -> None:
+    """An unhandled failure must not become a hosting platform's error page."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    runtime = AlphaRuntime.create(config, discover=False)
+    monkeypatch.setattr(runtime, "health", boom)
+
+    with TestClient(create_app(config, runtime=runtime)) as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("application/json")
+    error = response.json()["error"]
+    assert error["code"] == "internal_error"
+    assert "boom" in error["message"]
+
+
+# ---------------------------------------------------------------------------
+# the hosting entrypoint (asgi:app)
+# ---------------------------------------------------------------------------
+
+
+def test_entrypoint_startup_failure_is_reported_as_json(monkeypatch) -> None:
+    """A broken deployment must still answer in the API's JSON error shape."""
+
+    import importlib
+
+    import alphaai.api as api_module
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("fastapi is not installed")
+
+    monkeypatch.setattr(api_module, "create_app", boom)
+    entrypoint = importlib.import_module("asgi")
+    app_under_test = entrypoint.build_app()
+
+    response = TestClient(app_under_test).get("/api/health")
+
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("application/json")
+    error = response.json()["error"]
+    assert error["code"] == "startup_failed"
+    assert "RuntimeError: fastapi is not installed" in error["message"]
+    assert "traceback" in error["details"]
