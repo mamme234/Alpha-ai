@@ -219,12 +219,21 @@ def spec_from_dict(data: Mapping[str, Any], *, source_path: str | None = None) -
     )
 
 
+#: Model-metadata directory relative to the repository root. The literal path is
+#: deliberate: deployment bundlers (Vercel's Python build) decide which data files
+#: to ship with a function by tracing path references in the source, so a purely
+#: constructed path would leave a deployed API with no model list at all.
+MODEL_SPECS_DIR = "configs/models"
+
+
 def load_model_specs(config: AlphaAIConfig | None = None, directory: str | Path | None = None) -> list[ModelSpec]:
     """Load every ``configs/models/*.json`` file (sorted, deterministic)."""
 
     if directory is None:
-        base = Path(config.paths.configs_dir) if config else Path("configs")
-        directory = base / "models"
+        specs_dir = Path(MODEL_SPECS_DIR)
+        if config is not None:
+            specs_dir = Path(config.paths.configs_dir) / specs_dir.name
+        directory = specs_dir
     directory = Path(directory)
     if not directory.exists():
         return []
