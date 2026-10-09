@@ -69,21 +69,28 @@ nothing reads them, and nothing should ship them to a browser.
 
 ### Which component owns the database
 
-Set `DATABASE_URL` on **exactly one** deployment:
+A database is not an inference concern, so either tier can hold it — and both
+can, as long as they point at the **same** database:
 
 | Deployment | Connection method | Why |
 | ---------- | ----------------- | --- |
-| The AlphaAI **inference host** (long-lived container, `alphaai serve`) | direct connection (port 5432) or Supavisor **session** mode | it is a normal long-lived server; it already has a persistent disk and it is what produces the chat turns |
-| The **Vercel gateway** (serverless FastAPI) | Supavisor **transaction** mode (port 6543) | functions are short-lived and recycled; session/transaction state cannot be assumed |
+| The AlphaAI **inference host** (long-lived container, `alphaai serve`) | direct connection (port 5432) or Supavisor **session** mode | it is a normal long-lived server, it already has a persistent disk, and it is what produces the chat turns (so it is what writes them) |
+| The **Vercel gateway** (serverless FastAPI) | Supavisor **transaction** mode (port 6543) | functions are short-lived and recycled; session state cannot be assumed |
 
-They are *not* interchangeable. A serverless function on the direct connection
-exhausts Supabase's connection slots; a long-lived server on the transaction
-pooler pays a new backend per statement for nothing.
+The connection methods are *not* interchangeable: a serverless function on the
+direct connection exhausts Supabase's connection slots, and a long-lived server
+on the transaction pooler pays a new backend per statement for nothing.
 
-If the deployment that holds `DATABASE_URL` is the gateway, the gateway serves
-`/api/conversations*` itself and health reports its database under `database`.
-Without a local `DATABASE_URL` those routes are proxied to the inference host,
-which owns the store in that arrangement.
+Recommended arrangement: put `DATABASE_URL` on the **inference host** — that is
+where chat turns are produced, so that is where they can actually be written. Add
+the same database (same project, transaction-pooler string) to the **gateway** as
+well if you want history readable while the inference host is asleep. Both
+pointing at one database is consistent; pointing the two tiers at *different*
+databases is what splits a user's threads in half, so do not do that.
+
+Whichever deployment holds `DATABASE_URL` serves `/api/conversations*` itself and
+reports its store under `database` in `/api/health`. Without a local
+`DATABASE_URL` those routes are proxied to the inference host.
 
 ---
 
