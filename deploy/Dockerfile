@@ -7,7 +7,12 @@
 #   docker run -d --name alphaai -p 8090:8090 \
 #     -v alphaai-data:/data \
 #     -e ALPHAI_CORS_ORIGINS=https://your-app.vercel.app \
+#     -e ALPHAI_INFERENCE_TOKEN=... \
 #     alphaai-api
+#
+# Conversation history is optional: set DATABASE_URL (Supabase) to enable it. A
+# long-lived host like this one should use the direct connection (port 5432) or
+# Supavisor's *session* mode, not the transaction pooler. See docs/DATABASE.md.
 #
 # The GGUF weights are downloaded on first boot into /data/models (about
 # 0.5 GB) and are never baked into the image or committed to git.
@@ -32,9 +37,12 @@ WORKDIR /app
 COPY pyproject.toml README.md /app/
 COPY alphaai /app/alphaai
 COPY configs /app/configs
+# The SQL migrations ship with the image so `alphaai db migrate` (or
+# ALPHAI_DB_MIGRATE_ON_START=1) can apply the schema from inside the container.
+COPY supabase /app/supabase
 RUN pip install --upgrade pip \
  && pip install --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
-        ".[api,llama]"
+        ".[api,llama,db]"
 
 COPY deploy/entrypoint.sh /app/deploy/entrypoint.sh
 

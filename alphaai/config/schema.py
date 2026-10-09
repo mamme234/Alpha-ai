@@ -40,6 +40,9 @@ class PathsConfig:
     state_dir: str = ".alphaai"
     workspace_dir: str = "workspace"
     log_dir: str = ".alphaai/logs"
+    #: Version-controlled SQL migrations (the Supabase CLI's directory, so both
+    #: `supabase db push` and `alphaai db migrate` read the same files).
+    migrations_dir: str = "supabase/migrations"
 
 
 @dataclass(slots=True)
@@ -190,10 +193,43 @@ class ApiConfig:
     enable_dashboard: bool = True
     #: Base URL of the AlphaAI inference server (env: ALPHAI_INFERENCE_URL).
     inference_url: str = ""
-    #: Shared secret the inference server requires (env: ALPHAI_INFERENCE_TOKEN).
+    #: Shared secret for gateway -> inference-server calls (env:
+    #: ALPHAI_INFERENCE_TOKEN, alias ALPHA_INFERENCE_TOKEN). The gateway presents
+    #: it as ``Authorization: Bearer``; an inference host with this set requires
+    #: it on ``/api/*``. Empty by default: no token is sent and none is required.
     inference_token: str = ""
     #: Seconds to wait for the inference server before giving up.
     inference_timeout_s: float = 300.0
+
+
+@dataclass(slots=True)
+class DatabaseConfig:
+    """Conversation persistence (PostgreSQL, e.g. Supabase hosted).
+
+    ``url`` is the **only** credential AlphaAI needs and it stays on the server:
+    it is read from ``DATABASE_URL`` (or ``ALPHAI_DATABASE_URL``), never sent to a
+    browser and never written to a response. The Supabase *API* keys are
+    deliberately not part of this config — AlphaAI talks the PostgreSQL protocol
+    directly, so no service-role key exists anywhere in the deployment.
+
+    Connection method matters and is not interchangeable: a long-lived server
+    (the AlphaAI inference host, which also serves history) should use the direct
+    connection or the session pooler, while a short-lived serverless function
+    should use the transaction pooler. ``alphaai db status`` and
+    ``GET /api/health`` report which one is in use.
+    """
+
+    #: PostgreSQL connection string (env: DATABASE_URL, then ALPHAI_DATABASE_URL).
+    url: str = ""
+    #: Applied when the connection string does not state its own sslmode.
+    ssl_mode: str = "require"
+    connect_timeout_s: float = 10.0
+    statement_timeout_ms: int = 15_000
+    application_name: str = "alphaai"
+    #: Upper bound for ``limit`` on list endpoints (a client cannot ask for more).
+    max_list_limit: int = 200
+    #: Apply pending migrations at startup (opt-in: a boot must stay predictable).
+    migrate_on_start: bool = False
 
 
 @dataclass(slots=True)
@@ -229,6 +265,7 @@ class AlphaAIConfig:
     routing: RoutingConfig = field(default_factory=RoutingConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     api: ApiConfig = field(default_factory=ApiConfig)
+    database: DatabaseConfig = field(default_factory=DatabaseConfig)
     training: TrainingConfigPaths = field(default_factory=TrainingConfigPaths)
 
     # -- helpers ---------------------------------------------------------
@@ -257,6 +294,17 @@ class AlphaAIConfig:
             problems.append("api.inference_url must be an http(s) URL of an AlphaAI inference server")
         if self.api.inference_timeout_s <= 0:
             problems.append("api.inference_timeout_s must be > 0")
+        if self.database.url and not self.database.url.startswith(("postgresql://", "postgres://")):
+            problems.append(
+                "database.url must be a PostgreSQL connection string "
+                "(postgresql://user:password@host:port/database)"
+            )
+        if self.database.connect_timeout_s <= 0:
+            problems.append("database.connect_timeout_s must be > 0")
+        if self.database.statement_timeout_ms < 1:
+            problems.append("database.statement_timeout_ms must be >= 1")
+        if self.database.max_list_limit < 1:
+            problems.append("database.max_list_limit must be >= 1")
         if self.tools.allow_code_execution and not self.tools.sandbox_root:
             problems.append("tools.sandbox_root is required when code execution is enabled")
         for tool_id, perm in self.tools.permissions.items():

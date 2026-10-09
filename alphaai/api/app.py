@@ -27,6 +27,7 @@ separate, always-on AlphaAI inference server. See :mod:`alphaai.api.gateway`.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import math
@@ -52,8 +53,14 @@ from ..branding import (
 )
 from ..config.loader import public_config_view
 from ..config.schema import AlphaAIConfig
-from ..core.errors import AlphaAIError, RuntimeUnavailableError
+from ..core.errors import (
+    AlphaAIError,
+    DatabaseNotFoundError,
+    DatabaseNotConfiguredError,
+    RuntimeUnavailableError,
+)
 from ..core.runtime import AlphaRuntime
+from ..db import open_database, validate_client_id
 from ..version import CORE_INTERFACE_VERSION, __version__
 from .gateway import configure_gateway, inference_host, normalize_inference_url
 
@@ -73,6 +80,7 @@ STATUS_BY_CODE = {
     "context_overflow": 413,
     "tool_timeout": 504,
     "skill_timeout": 504,
+    "unauthorized": 401,
     "engine_unavailable": 503,
     "engine_load_failed": 503,
     "inference_unreachable": 503,
@@ -84,6 +92,10 @@ STATUS_BY_CODE = {
     "memory_error": 500,
     "skill_execution_failed": 500,
     "tool_execution_failed": 500,
+    "invalid_request": 400,
+    "conversation_not_found": 404,
+    "database_not_configured": 503,
+    "database_unavailable": 503,
 }
 
 
@@ -102,6 +114,44 @@ class ChatRequest(BaseModel):
     temperature: float | None = Field(default=None, ge=0.0, le=4.0)
     top_p: float | None = Field(default=None, gt=0.0, le=1.0)
     seed: int | None = None
+    #: Anonymous dashboard id. Supplying it (with persistence available) is what
+    #: saves the turn to PostgreSQL; without it the turn is answered and not stored.
+    client_id: str | None = Field(default=None, max_length=200)
+    #: Continue an existing stored thread instead of starting a new one.
+    conversation_id: str | None = Field(default=None, max_length=64)
+    #: ``False`` opts out of persistence for this turn even when client_id is set.
+    persist: bool = True
+
+
+class ConversationCreateRequest(BaseModel):
+    client_id: str = Field(min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
+    session_id: str | None = Field(default=None, max_length=200)
+    engine_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    conversation_id: str | None = Field(default=None, max_length=64)
+
+
+class MessageCreateRequest(BaseModel):
+    client_id: str = Field(min_length=1, max_length=200)
+    role: str = Field(default="user", max_length=32)
+    content: str = Field(min_length=1, max_length=200_000)
+    engine_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
+    finish_reason: str | None = Field(default=None, max_length=32)
+    latency_ms: float | None = Field(default=None, ge=0.0)
+    usage: dict[str, Any] | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class PreferencesRequest(BaseModel):
+    client_id: str = Field(min_length=1, max_length=200)
+    preferences: dict[str, Any] = Field(default_factory=dict)
+
+
+class MigrateRequest(BaseModel):
+    directory: str | None = Field(default=None, max_length=1024)
 
 
 class ToolExecuteRequest(BaseModel):
@@ -140,6 +190,329 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
     return value
+
+
+# ---------------------------------------------------------------------------
+# persistence (PostgreSQL / Supabase)
+#
+# Where does the database live? On exactly the deployment that has DATABASE_URL
+# set. That is normally the inference host (it already has a persistent disk and
+# a long-lived process, and the chat turns it produces are what gets stored),
+# but a serverless gateway with its own DATABASE_URL can serve history too — a
+# database is not an inference concern. The routes below are registered by
+# whichever process owns the store; the other one proxies them.
+# ---------------------------------------------------------------------------
+def _store_for(request: Request) -> Any:
+    """The store this deployment uses, or the unconfigured placeholder."""
+
+    store = getattr(request.app.state, "database", None)
+    return store if store is not None else UnconfiguredStore()
+
+
+def database_health_decorator(store: Any) -> Any:
+    """Add a gateway's *own* database block to the proxied health payload.
+
+    The inference host may report a database too. Renaming that one keeps
+    ``database`` unambiguous: it is always the store this API answers with.
+    """
+
+    def decorate(payload: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(payload.get("database"), dict):
+            payload["inference_database"] = payload.pop("database")
+        payload["database"] = store.status()
+        return payload
+
+    return decorate
+
+
+def conversation_not_found(conversation_id: str) -> JSONResponse:
+    """404 in the same error shape as every other AlphaAI failure."""
+
+    return JSONResponse(
+        {
+            "ok": False,
+            "error": {
+                "code": "conversation_not_found",
+                "message": "No conversation with that id exists for this client.",
+                "details": {"conversation_id": conversation_id},
+            },
+        },
+        status_code=404,
+    )
+
+
+def _persist_turn(
+    store: Any,
+    payload: ChatRequest,
+    *,
+    assistant: dict[str, Any],
+) -> dict[str, Any]:
+    """Save one chat turn, or explain why it was not saved.
+
+    Called only when the client asked for persistence (``client_id`` set and
+    ``persist`` true). It never raises: the answer has already been produced by
+    real inference, so a persistence failure is reported in the response as
+    ``persistence`` rather than thrown away as a 500. Nothing is ever reported
+    as saved unless it was.
+    """
+
+    if store is None or not store.configured:
+        return {
+            "requested": True,
+            "persisted": False,
+            "error": DatabaseNotConfiguredError(
+                "This AlphaAI server has no database configured, so the turn was not saved."
+            ).to_dict(),
+        }
+    try:
+        conversation_id = payload.conversation_id
+        if conversation_id:
+            conversation = store.get_conversation(
+                conversation_id, client_id=payload.client_id, include_messages=False
+            )
+            if conversation is None:
+                raise DatabaseNotFoundError(
+                    "That conversation does not exist for this client.",
+                    remediation=(
+                        "Start a new conversation by omitting conversation_id, then send the "
+                        "id it returns with the next turn."
+                    ),
+                    details={"conversation_id": conversation_id},
+                )
+        else:
+            conversation = store.create_conversation(
+                client_id=payload.client_id,
+                session_id=assistant.get("session_id"),
+                engine_id=assistant.get("engine_id"),
+                model=assistant.get("model"),
+                metadata={"task": payload.task} if payload.task else {},
+            )
+        identifier = conversation["id"]
+        store.append_message(
+            identifier, role="user", content=payload.message, client_id=payload.client_id
+        )
+        saved = store.append_message(
+            identifier,
+            role="assistant",
+            content=assistant.get("text") or "",
+            client_id=payload.client_id,
+            engine_id=assistant.get("engine_id"),
+            model=assistant.get("model"),
+            finish_reason=assistant.get("finish_reason"),
+            latency_ms=assistant.get("latency_ms"),
+            usage=assistant.get("usage"),
+            metadata={"runtime": assistant["runtime"]} if assistant.get("runtime") else {},
+        )
+        store.record_usage(
+            client_id=payload.client_id,
+            conversation_id=identifier,
+            engine_id=assistant.get("engine_id"),
+            model=assistant.get("model"),
+            usage=assistant.get("usage"),
+            latency_ms=assistant.get("latency_ms"),
+            metadata={"source": "chat"},
+        )
+    except AlphaAIError as exc:
+        return {"requested": True, "persisted": False, "error": _json_safe(exc.to_dict())}
+    return {
+        "requested": True,
+        "persisted": True,
+        "conversation_id": identifier,
+        "message_id": saved.get("id"),
+    }
+
+
+def _persistence_for(
+    request: Request, payload: ChatRequest, assistant: dict[str, Any]
+) -> dict[str, Any]:
+    """The persistence block of a chat response (skipped unless requested)."""
+
+    if not payload.persist:
+        return {"requested": False, "persisted": False, "detail": "persist=false"}
+    if not payload.client_id:
+        return {
+            "requested": False,
+            "persisted": False,
+            "detail": (
+                "no client_id supplied: the turn was answered and not stored. Send "
+                "client_id to save conversations."
+            ),
+        }
+    return _persist_turn(_store_for(request), payload, assistant=assistant)
+
+
+def register_persistence_routes(
+    app: FastAPI,
+    *,
+    store: Any,
+    config: AlphaAIConfig | None,
+    error_response: Any,
+) -> None:
+    """Register ``/api/conversations``, ``/api/preferences``, ``/api/usage``.
+
+    Registered whether or not a database is configured: an unconfigured store
+    answers every call with a structured ``database_not_configured`` error, which
+    is far more useful than a 404 that looks like "no history yet".
+    """
+
+    def config_view() -> dict[str, Any]:
+        if config is None:
+            return {"configured": False}
+        return public_config_view(config)["database"]
+
+    def client_of(raw: str) -> str:
+        """Validate the anonymous dashboard id before it reaches any store.
+
+        The id scopes rows to one browser. It is not authentication, so it is
+        only ever used as a parameter — and a malformed one is a 400 here rather
+        than a driver error later.
+        """
+
+        return validate_client_id(raw)
+
+    @app.get("/api/conversations", tags=["persistence"])
+    def list_conversations(
+        request: Request, client_id: str, limit: int = 50, offset: int = 0
+    ) -> Any:
+        active = _store_for(request)
+        try:
+            items = active.list_conversations(
+                client_id=client_of(client_id), limit=limit, offset=offset
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {
+            "ok": True,
+            "count": len(items),
+            "conversations": items,
+            "persistence": {
+                "configured": bool(active.configured),
+                "client_id": client_id,
+                "limit": limit,
+                "offset": offset,
+            },
+        }
+
+    @app.post("/api/conversations", tags=["persistence"])
+    def create_conversation(payload: ConversationCreateRequest, request: Request) -> Any:
+        try:
+            conversation = _store_for(request).create_conversation(
+                client_id=client_of(payload.client_id),
+                title=payload.title,
+                session_id=payload.session_id,
+                engine_id=payload.engine_id,
+                model=payload.model,
+                metadata=payload.metadata,
+                conversation_id=payload.conversation_id,
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {"ok": True, "conversation": conversation}
+
+    @app.get("/api/conversations/{conversation_id}", tags=["persistence"])
+    def get_conversation(
+        conversation_id: str, request: Request, client_id: str | None = None
+    ) -> Any:
+        try:
+            conversation = _store_for(request).get_conversation(
+                conversation_id, client_id=client_of(client_id) if client_id else None
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        if conversation is None:
+            return conversation_not_found(conversation_id)
+        return {"ok": True, "conversation": conversation}
+
+    @app.delete("/api/conversations/{conversation_id}", tags=["persistence"])
+    def delete_conversation(
+        conversation_id: str, request: Request, client_id: str | None = None
+    ) -> Any:
+        try:
+            deleted = _store_for(request).delete_conversation(
+                conversation_id, client_id=client_of(client_id) if client_id else None
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        if not deleted:
+            return conversation_not_found(conversation_id)
+        return {"ok": True, "deleted": conversation_id}
+
+    @app.post("/api/conversations/{conversation_id}/messages", tags=["persistence"])
+    def append_message(
+        conversation_id: str, payload: MessageCreateRequest, request: Request
+    ) -> Any:
+        try:
+            message = _store_for(request).append_message(
+                conversation_id,
+                role=payload.role,
+                content=payload.content,
+                client_id=client_of(payload.client_id),
+                engine_id=payload.engine_id,
+                model=payload.model,
+                finish_reason=payload.finish_reason,
+                latency_ms=payload.latency_ms,
+                usage=payload.usage,
+                metadata=payload.metadata,
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {"ok": True, "message": message}
+
+    @app.get("/api/preferences", tags=["persistence"])
+    def get_preferences(request: Request, client_id: str) -> Any:
+        try:
+            stored = _store_for(request).get_preferences(client_id=client_of(client_id))
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {"ok": True, **stored}
+
+    @app.put("/api/preferences", tags=["persistence"])
+    def set_preferences(payload: PreferencesRequest, request: Request) -> Any:
+        try:
+            stored = _store_for(request).set_preferences(
+                client_id=client_of(payload.client_id), preferences=payload.preferences
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {"ok": True, **stored}
+
+    @app.get("/api/usage", tags=["persistence"])
+    def usage(request: Request, client_id: str | None = None, limit: int = 50) -> Any:
+        try:
+            summary = _store_for(request).usage_summary(
+                client_id=client_of(client_id) if client_id else None, limit=limit
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {"ok": True, **summary}
+
+    @app.get("/api/database", tags=["persistence"])
+    def database_status(request: Request) -> dict[str, Any]:
+        """Connection, schema and migration state. Never fails."""
+
+        return {
+            "ok": True,
+            "database": _store_for(request).status(),
+            "config": config_view(),
+        }
+
+    @app.post("/api/database/migrate", tags=["persistence"])
+    def database_migrate(request: Request, payload: MigrateRequest | None = None) -> Any:
+        """Apply pending SQL migrations.
+
+        An explicit operator action (and, on an inference host that sets
+        ``ALPHAI_INFERENCE_TOKEN``, already protected by the token check).
+        """
+
+        try:
+            report = _store_for(request).migrate(
+                directory=payload.directory if payload else None
+            )
+        except AlphaAIError as exc:
+            return error_response(exc)
+        return {"ok": bool(report.get("ok", True)), "migration": report}
+
+    app.state.persistence_routes = True
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +633,31 @@ def create_app(
         logger.info("%s HTTP API ready", NAME)
         for line in attribution_lines():
             logger.info("%s", line)
+        store = getattr(app.state, "database", None)
+        if store is not None and store.configured:
+            status = store.status()
+            if status.get("reachable"):
+                logger.info(
+                    "persistence ready: %s/%s (%s)",
+                    status.get("host"),
+                    status.get("database"),
+                    status.get("mode"),
+                )
+            else:
+                logger.error(
+                    "persistence is configured but unreachable: %s",
+                    (status.get("error") or {}).get("message"),
+                )
+            if active_config is not None and active_config.database.migrate_on_start:
+                try:
+                    report = store.migrate()
+                    logger.info(
+                        "database migrations: applied %s, already applied %s",
+                        report.get("applied") or "none",
+                        len(report.get("already_applied") or []),
+                    )
+                except AlphaAIError as exc:  # the API still serves inference
+                    logger.error("database migrations failed: %s", exc.message)
         try:
             yield
         finally:
@@ -277,6 +675,14 @@ def create_app(
         docs_url=None if gateway_base else "/docs",
         redoc_url=None if gateway_base else "/redoc",
         openapi_url=None if gateway_base else "/openapi.json",
+    )
+
+    # Persistence is created up front but connects lazily: a deployment whose
+    # database is unreachable still boots and answers, reporting the database as
+    # unreachable. Without DATABASE_URL this is an UnconfiguredStore, which gives
+    # every persistence request a structured `database_not_configured` error.
+    app.state.database = (
+        open_database(active_config) if active_config is not None else open_database(AlphaAIConfig())
     )
 
     origins = list(active_config.api.cors_origins) if active_config else ["*"]
@@ -341,22 +747,54 @@ def create_app(
                 status_code=500,
             )
 
-    if gateway_base:
-        # Remote-inference deployment: the public API surface below is served by
-        # the inference server, not by this process.
-        if origins == ["*"]:
-            logger.warning(
-                "gateway mode is serving CORS origin '*' - set ALPHAI_CORS_ORIGINS to "
-                "the deployed frontend origin (same-origin routing needs no wildcard)"
+    if not gateway_base and api_config is not None and api_config.inference_token:
+        # An inference host that owns weights can require the shared secret that
+        # the gateway presents ($ALPHAI_INFERENCE_TOKEN). Without this the token
+        # would only be *sent* by the gateway and never checked, which protects
+        # nothing. The check covers the API the gateway forwards to (and the API
+        # documentation) and answers 401 in the usual JSON error shape.
+        # Consequences, by design: only a caller holding the token can talk to
+        # this server. That is the point on a private inference host — the
+        # gateway holds the token. A self-hosted deployment that also serves the
+        # browser dashboard must therefore leave the token unset (or the
+        # dashboard's own /api/* requests are refused), which is why the default
+        # is empty.
+        required_token = api_config.inference_token
+        protected_routes = ("/api", "/docs", "/redoc", "/openapi.json")
+
+        def _is_protected(path: str) -> bool:
+            return path in protected_routes or path.startswith("/api/")
+
+        @app.middleware("http")
+        async def _require_inference_token(request: Request, call_next):
+            if request.method == "OPTIONS" or not _is_protected(request.url.path):
+                # CORS preflights never carry credentials; the browser only
+                # preflights a cross-origin call, which the gateway never makes.
+                return await call_next(request)
+            presented = request.headers.get("authorization") or ""
+            scheme, _, value = presented.partition(" ")
+            if scheme.lower() == "bearer" and hmac.compare_digest(value.strip(), required_token):
+                return await call_next(request)
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "unauthorized",
+                        "message": (
+                            "This AlphaAI inference server requires the shared "
+                            "ALPHAI_INFERENCE_TOKEN."
+                        ),
+                        "remediation": (
+                            "Send `Authorization: Bearer <token>` with the same value as "
+                            "ALPHAI_INFERENCE_TOKEN on this host (the AlphaAI gateway does "
+                            "this automatically). Unset the variable to serve the API "
+                            "without a token."
+                        ),
+                    },
+                },
+                status_code=401,
+                headers={"WWW-Authenticate": "Bearer"},
             )
-        configure_gateway(
-            app,
-            base_url=gateway_base,
-            token=api_config.inference_token if api_config else "",
-            timeout_s=api_config.inference_timeout_s if api_config else 300.0,
-            dashboard=api_config.enable_dashboard if api_config else True,
-        )
-        return app
 
     def get_runtime(request: Request) -> AlphaRuntime:
         active = getattr(request.app.state, "runtime", None)
@@ -373,6 +811,50 @@ def create_app(
     def error_response(exc: AlphaAIError) -> JSONResponse:
         payload = {"ok": False, "error": _json_safe(exc.to_dict())}
         return JSONResponse(payload, status_code=STATUS_BY_CODE.get(exc.code, 500))
+
+    if gateway_base:
+        # Remote-inference deployment: the public API surface below is served by
+        # the inference server, not by this process.
+        if origins == ["*"]:
+            logger.warning(
+                "gateway mode is serving CORS origin '*' - set ALPHAI_CORS_ORIGINS to "
+                "the deployed frontend origin (same-origin routing needs no wildcard)"
+            )
+        # A gateway that has its own DATABASE_URL serves history itself: a database
+        # is not an inference concern, and this is what makes history available
+        # even while the inference host is down. Without one, the routes stay
+        # unregistered and the catch-all below forwards them to the inference
+        # host, which owns the store in that deployment.
+        decorate_health = None
+        if app.state.database.configured:
+            logger.info(
+                "DATABASE_URL is set on this gateway: /api/conversations* are served "
+                "here (connections use the pooler-friendly settings; a long-lived "
+                "inference host would use the direct/session connection instead)"
+            )
+            register_persistence_routes(
+                app,
+                store=app.state.database,
+                config=active_config,
+                error_response=error_response,
+            )
+            decorate_health = database_health_decorator(app.state.database)
+        configure_gateway(
+            app,
+            base_url=gateway_base,
+            token=api_config.inference_token if api_config else "",
+            timeout_s=api_config.inference_timeout_s if api_config else 300.0,
+            dashboard=api_config.enable_dashboard if api_config else True,
+            decorate_health=decorate_health,
+        )
+        return app
+
+    # Local (inference) deployment: history is served by this process, and with
+    # no database configured every persistence request answers with a structured
+    # `database_not_configured` error rather than an empty, fabricated history.
+    register_persistence_routes(
+        app, store=app.state.database, config=active_config, error_response=error_response
+    )
 
     # -- meta -------------------------------------------------------------
     @app.get("/api", tags=["meta"])
@@ -403,13 +885,32 @@ def create_app(
                 "GET /api/config",
                 "POST /api/orchestrate",
                 "GET /api/tools/calls",
+                "GET /api/conversations",
+                "POST /api/conversations",
+                "GET /api/conversations/{conversation_id}",
+                "DELETE /api/conversations/{conversation_id}",
+                "POST /api/conversations/{conversation_id}/messages",
+                "GET /api/preferences",
+                "PUT /api/preferences",
+                "GET /api/usage",
+                "GET /api/database",
+                "POST /api/database/migrate",
             ],
             "note": "AlphaAI performs local inference only: no external AI provider, no API keys.",
         }
 
     @app.get("/api/health", tags=["meta"])
     def health(request: Request) -> dict[str, Any]:
-        return get_runtime(request).health()
+        """Runtime health **and** database health.
+
+        The database block is additive: AlphaAI's health endpoint keeps working
+        when nothing is configured (``database.configured: false``) or when the
+        database is down (``database.reachable: false`` with the real error).
+        """
+
+        payload = get_runtime(request).health()
+        payload["database"] = _store_for(request).status()
+        return payload
 
     @app.get("/api/runtime", tags=["meta"])
     def runtime_info(request: Request) -> dict[str, Any]:
@@ -546,6 +1047,7 @@ def create_app(
             return error_response(exc)
         body = outcome.to_dict()
         body["ok"] = True
+        body["persistence"] = _persistence_for(request, payload, body)
         return body
 
     @app.post("/api/chat/stream", tags=["chat"])
@@ -557,8 +1059,14 @@ def create_app(
         use_sse = format != "ndjson"
 
         def event_stream() -> Iterator[str]:
+            collected: list[str] = []
+            done: dict[str, Any] | None = None
             try:
                 for event in runtime_state.stream(payload.message, **kwargs):
+                    if event.get("type") == "delta" and event.get("text"):
+                        collected.append(str(event["text"]))
+                    elif event.get("type") == "done":
+                        done = event
                     if use_sse:
                         yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                     else:
@@ -569,6 +1077,27 @@ def create_app(
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 else:
                     yield json.dumps(event, ensure_ascii=False) + "\n"
+            if done is not None:
+                # Persistence happens after the last token reached the client, and
+                # the outcome is streamed as its own event so the dashboard can say
+                # whether the thread was saved — without inventing a save that did
+                # not happen. Streamed usage is whatever the engine actually
+                # reported: no token counts are estimated here.
+                assistant = {
+                    **done,
+                    "text": "".join(collected),
+                    "usage": {
+                        "source": "stream",
+                        "approximate_context_tokens": done.get("approximate_context_tokens"),
+                        "token_source": done.get("token_source"),
+                    },
+                }
+                outcome = _persistence_for(request, payload, assistant)
+                saved = {"type": "persisted", **outcome}
+                if use_sse:
+                    yield f"data: {json.dumps(saved, ensure_ascii=False)}\n\n"
+                else:
+                    yield json.dumps(saved, ensure_ascii=False) + "\n"
             if use_sse:
                 yield "event: alphaai-done\ndata: [DONE]\n\n"
 
@@ -626,7 +1155,11 @@ def create_app(
 
 __all__ = [
     "ChatRequest",
+    "ConversationCreateRequest",
+    "MessageCreateRequest",
+    "MigrateRequest",
     "OrchestrateRequest",
+    "PreferencesRequest",
     "SkillExecuteRequest",
     "STATUS_BY_CODE",
     "ToolExecuteRequest",

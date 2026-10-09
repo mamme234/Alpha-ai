@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import urlsplit
@@ -134,8 +134,14 @@ def configure_gateway(
     token: str = "",
     timeout_s: float = 300.0,
     dashboard: bool = True,
+    decorate_health: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> str:
     """Turn ``app`` into a stateless gateway in front of ``base_url``.
+
+    ``decorate_health`` (optional) receives the inference server's health payload
+    and returns the payload to send. It is how a gateway that owns a database of
+    its own reports it in the same response
+    (:func:`alphaai.api.app.database_health_decorator`).
 
     Returns the normalized base URL that was registered.
     """
@@ -231,6 +237,11 @@ def configure_gateway(
             "token_required": bool(token),
             "reachable": True,
         }
+        if decorate_health is not None:
+            try:
+                payload = decorate_health(payload)
+            except Exception:  # noqa: BLE001 - health must still answer
+                logger.warning("gateway health decorator failed", exc_info=True)
         return JSONResponse(payload, status_code=response.status_code)
 
     for route in PROXIED_DOCUMENTATION_ROUTES:

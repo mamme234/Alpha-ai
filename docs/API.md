@@ -36,6 +36,15 @@ serve a request, you get a structured error.
 | `POST` | `/api/tools/execute` | execute a tool under policy |
 | `POST` | `/api/skills/execute` | execute a skill under policy |
 | `POST` | `/api/orchestrate` | declared plan or goal-driven run |
+| `GET` | `/api/conversations` | stored threads for a `client_id` (newest first) |
+| `POST` | `/api/conversations` | create a stored thread |
+| `GET` | `/api/conversations/{id}` | one stored thread with its messages |
+| `DELETE` | `/api/conversations/{id}` | delete a stored thread |
+| `POST` | `/api/conversations/{id}/messages` | append a message to a stored thread |
+| `GET`/`PUT` | `/api/preferences` | per-client preferences (server-side) |
+| `GET` | `/api/usage` | usage totals + recent generations |
+| `GET` | `/api/database` | connection/schema/migration state (never fails) |
+| `POST` | `/api/database/migrate` | apply pending SQL migrations |
 
 `GET` list endpoints return `{"ok": true, "count": <n>, ...}`.
 
@@ -94,7 +103,22 @@ curl -s localhost:8000/api/orchestrate \
 | `engine_unavailable`, `engine_load_failed`, `no_suitable_model` | 503 |
 | `generation_failed` | 502 |
 | `model_incompatible` | 409 |
-| `conversation_error` | 404 |
+| `conversation_error`, `conversation_not_found` | 404 |
+| `invalid_request` | 400 |
+| `database_not_configured`, `database_unavailable` | 503 |
 | `memory_error`, `skill_execution_failed`, `tool_execution_failed` | 500 |
+
+## Persistence (conversation history)
+
+`POST /api/chat` stores a turn when it is given a `client_id` (and `persist` is
+not `false`); `conversation_id` continues an existing thread. Each chat response
+reports the outcome under `persistence` — `persisted: true` with the ids, or
+`persisted: false` with the exact error. `POST /api/chat/stream` sends the same
+outcome as a final `{"type": "persisted", ...}` event.
+
+Without a configured database the chat still answers and reports
+`database_not_configured`; the history endpoints answer 503 with the same code
+rather than an empty list. Full schema, security and setup:
+[`DATABASE.md`](./DATABASE.md).
 
 The mapping lives in `alphaai/api/app.py` (`STATUS_BY_CODE`).

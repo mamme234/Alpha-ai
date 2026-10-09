@@ -10,6 +10,8 @@
     alphaai route "translate this to french"
     alphaai orchestrate --goal "..."   # agent loop (needs a usable engine)
     alphaai train validate             # training foundation checks
+    alphaai db status                  # PostgreSQL/Supabase connection + migrations
+    alphaai db migrate                 # apply pending SQL migrations
     alphaai serve                      # FastAPI on api.host:api.port
 """
 
@@ -124,6 +126,113 @@ def cmd_config(args: argparse.Namespace) -> int:
         payload = public_config_view(runtime.config)
     _dump(payload, args.json)
     return 0
+
+
+def cmd_db(args: argparse.Namespace) -> int:
+    """Inspect and migrate AlphaAI's PostgreSQL (Supabase) schema.
+
+    Loads configuration only — no model, no weights — so it is safe to run on a
+    database host that has never run inference.
+    """
+
+    from .config.loader import load_config, public_config_view
+    from .db import open_database
+    from .db.migrate import discover_migrations
+
+    config = load_config(
+        getattr(args, "config", None), project_root=getattr(args, "project_root", None)
+    )
+    store = open_database(config)
+    public = public_config_view(config)["database"]
+
+    if args.action == "status":
+        payload = {"ok": True, "database": store.status(), "config": public}
+        if args.json:
+            _dump(payload, True)
+            return 0
+        status = payload["database"]
+        print(f"configured: {status.get('configured')}")
+        if status.get("configured"):
+            print(f"host: {status.get('host')}:{status.get('port')} ({status.get('mode')})")
+            print(f"database: {status.get('database')} as {status.get('user')} (sslmode {status.get('sslmode')})")
+        print(f"reachable: {status.get('reachable')}")
+        if not status.get("reachable"):
+            if status.get("configured"):
+                error = status.get("error") or {}
+                print(f"  [{error.get('code', 'unknown')}] {error.get('message')}")
+                if error.get("remediation"):
+                    print(f"  fix: {error['remediation']}")
+            else:
+                print(f"  {status.get('detail')}")
+                if status.get("remediation"):
+                    print(f"  fix: {status['remediation']}")
+        migrations = status.get("migrations")
+        if migrations:
+            print(f"migrations applied: {migrations.get('applied')} (latest {migrations.get('latest')})")
+            if migrations.get("pending"):
+                print(f"  pending: {', '.join(migrations['pending'])}")
+            if migrations.get("drift"):
+                for item in migrations["drift"]:
+                    print(f"  drift: {item['name']} changed after it was applied")
+        return 0
+
+    # plan / migrate
+    directory = args.directory or config.paths.migrations_dir
+    migrations = discover_migrations(directory)
+    if not migrations:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "no_migrations_found",
+                        "message": f"No migration files found in {directory}.",
+                        "remediation": "Run from the AlphaAI repository, or pass --directory.",
+                    },
+                },
+                indent=2,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.action == "plan":
+        # Reading the ledger needs a reachable database; without one the plan is
+        # simply "every file on disk is unapplied", which is the truth.
+        state = store.migration_state() if store.configured else {}
+        pending = state.get("pending") or [item.name for item in migrations]
+        payload = {
+            "ok": True,
+            "directory": str(directory),
+            "database_configured": store.configured,
+            "applied": state.get("applied"),
+            "latest": state.get("latest"),
+            "drift": state.get("drift") or [],
+            "migrations": [item.to_dict() for item in migrations],
+            "pending": pending,
+            "note": (
+                "Plan only: nothing applied. Run `alphaai db migrate` to apply pending "
+                "migrations (each file is one transaction)."
+            ),
+        }
+        if not args.json:
+            for item in migrations:
+                marker = "applied" if item.name not in pending else "pending"
+                print(f"{item.name:<56} {marker}")
+            if payload["drift"]:
+                for item in payload["drift"]:
+                    print(f"drift: {item['name']} changed after it was applied")
+            return 0
+        _dump(payload, True)
+        return 0
+
+    try:
+        report = store.migrate(directory=args.directory)
+    except AlphaAIError as exc:
+        _dump({"ok": False, "error": exc.to_dict()}, True)
+        return 1
+    _dump(report, True)
+    return 0 if report.get("ok", True) else 1
 
 
 def cmd_models(args: argparse.Namespace) -> int:
@@ -471,6 +580,15 @@ def build_parser() -> argparse.ArgumentParser:
     config.add_argument("action", choices=["show", "paths", "validate"], nargs="?", default="show")
     config.add_argument("--json", action="store_true")
     config.set_defaults(func=cmd_config)
+
+    db = sub.add_parser("db", help="Inspect and migrate the AlphaAI PostgreSQL schema.")
+    db.add_argument("action", choices=["status", "plan", "migrate"], nargs="?", default="status")
+    db.add_argument(
+        "--directory",
+        help="Migration directory (default: paths.migrations_dir, i.e. supabase/migrations).",
+    )
+    db.add_argument("--json", action="store_true")
+    db.set_defaults(func=cmd_db)
 
     models = sub.add_parser("models", help="List, check and install model engines.")
     models.add_argument("action", choices=["list", "check", "show", "install"], nargs="?", default="list")

@@ -9,6 +9,8 @@ the CLI and API only ever use engines discovered from ``configs/models``.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -17,6 +19,7 @@ import pytest
 from alphaai.config.loader import load_config
 from alphaai.config.schema import AlphaAIConfig
 from alphaai.core.engine import ModelEngine, ModelSpec, spec_from_dict
+from alphaai.core.errors import DatabaseNotFoundError
 from alphaai.core.runtime import AlphaRuntime
 from alphaai.core.types import (
     Capability,
@@ -57,6 +60,198 @@ LOCAL_MODEL_READY, LOCAL_MODEL_REASON = local_model_status()
 #: (with the exact reason) on a machine without the runtime or the weights —
 #: never replaced by a mock.
 requires_local_model = pytest.mark.skipif(not LOCAL_MODEL_READY, reason=LOCAL_MODEL_REASON)
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL (Supabase) test support
+# ---------------------------------------------------------------------------
+#: Point this at any empty PostgreSQL database (a throwaway Supabase project is
+#: fine) to run the persistence tests against a real server.
+DATABASE_URL_ENV = "ALPHAI_TEST_DATABASE_URL"
+
+REPO_MIGRATIONS_DIR = REPO_ROOT / "supabase" / "migrations"
+
+
+def _database_url() -> tuple[str, str]:
+    """A real PostgreSQL URL for the persistence tests, or the reason there is none.
+
+    Follows the local-model convention: real when it can be, skipped with the
+    exact reason when it cannot, never silently replaced by a fake. An explicit
+    ``ALPHAI_TEST_DATABASE_URL`` wins; otherwise a private temporary PostgreSQL
+    is started with ``pgserver`` if that package is installed.
+    """
+
+    try:
+        import psycopg  # noqa: F401 - the driver the store uses
+    except ImportError:
+        return (
+            "",
+            "no PostgreSQL driver: `pip install 'psycopg[binary]'` (or `pip install -e '.[db]'`) "
+            "to run the persistence tests against a real database",
+        )
+    explicit = os.environ.get(DATABASE_URL_ENV)
+    if explicit:
+        return explicit, ""
+    try:
+        import pgserver  # noqa: F401 - optional developer dependency
+    except ImportError:
+        return (
+            "",
+            f"no PostgreSQL available: set {DATABASE_URL_ENV} or `pip install pgserver` to "
+            "run the persistence tests against a real database",
+        )
+    try:
+        server = pgserver.get_server(tempfile.mkdtemp(prefix="alphaai-test-pg-"))
+        return server.get_uri(), ""
+    except Exception as exc:  # noqa: BLE001 - any failure means "no database here"
+        return "", f"no PostgreSQL available: pgserver could not start one here ({exc})"
+
+
+DATABASE_READY, DATABASE_REASON = _database_url()
+
+#: Apply to tests that need a real PostgreSQL server. They are skipped (with the
+#: exact reason) when there is none — never weakened into a fake.
+requires_database = pytest.mark.skipif(not DATABASE_READY, reason=DATABASE_REASON)
+
+
+class MemoryStore:
+    """An in-memory :class:`~alphaai.db.base.ConversationStore`, for tests only.
+
+    It exists so the API's persistence wiring (routes, chat persistence, the
+    websocket-free streaming event) can be exercised without a database. It is
+    never used by ``alphaai`` itself, and the SQL behaviour of the real store is
+    verified against a real PostgreSQL in ``tests/test_database.py``.
+    """
+
+    configured = True
+
+    def __init__(self) -> None:
+        self.conversations: dict[str, dict[str, Any]] = {}
+        self.messages: list[dict[str, Any]] = []
+        self.preferences: dict[str, dict[str, Any]] = {}
+        self.usage: list[dict[str, Any]] = []
+        self.counter = 0
+
+    # -- health ----------------------------------------------------------
+    def status(self) -> dict[str, Any]:
+        return {
+            "configured": True,
+            "reachable": True,
+            "mode": "memory",
+            "host": "memory",
+            "migrations": {"applied": 0, "pending": []},
+        }
+
+    # -- conversations ---------------------------------------------------
+    def list_conversations(
+        self, *, client_id: str, limit: int = 50, offset: int = 0
+    ) -> list[dict[str, Any]]:
+        items = [item for item in self.conversations.values() if item["client_id"] == client_id]
+        items.sort(key=lambda item: item["updated_at"], reverse=True)
+        return [dict(item) for item in items[offset : offset + limit]]
+
+    def create_conversation(self, **kwargs: Any) -> dict[str, Any]:
+        self.counter += 1
+        identifier = kwargs.get("conversation_id") or f"00000000-0000-4000-8000-{self.counter:012d}"
+        item = {
+            "id": identifier,
+            "client_id": kwargs["client_id"],
+            "title": kwargs.get("title") or "New conversation",
+            "session_id": kwargs.get("session_id"),
+            "engine_id": kwargs.get("engine_id"),
+            "model": kwargs.get("model"),
+            "metadata": kwargs.get("metadata") or {},
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "message_count": 0,
+            "preview": "",
+        }
+        self.conversations[identifier] = item
+        return dict(item)
+
+    def get_conversation(
+        self,
+        conversation_id: str,
+        *,
+        client_id: str | None = None,
+        include_messages: bool = True,
+    ) -> dict[str, Any] | None:
+        item = self.conversations.get(conversation_id)
+        if item is None or (client_id and item["client_id"] != client_id):
+            return None
+        payload = dict(item)
+        if include_messages:
+            payload["messages"] = [
+                dict(message)
+                for message in self.messages
+                if message["conversation_id"] == conversation_id
+            ]
+        return payload
+
+    def delete_conversation(self, conversation_id: str, *, client_id: str | None = None) -> bool:
+        item = self.conversations.get(conversation_id)
+        if item is None or (client_id and item["client_id"] != client_id):
+            return False
+        del self.conversations[conversation_id]
+        self.messages = [m for m in self.messages if m["conversation_id"] != conversation_id]
+        return True
+
+    def append_message(self, conversation_id: str, **kwargs: Any) -> dict[str, Any]:
+        item = self.conversations.get(conversation_id)
+        owner = kwargs.get("client_id")
+        if item is None or (owner and item["client_id"] != owner):
+            raise DatabaseNotFoundError(
+                "No conversation with that id exists for this client."
+            )
+        self.counter += 1
+        message = {
+            "id": self.counter,
+            "conversation_id": conversation_id,
+            "role": kwargs["role"],
+            "content": kwargs["content"],
+            "engine_id": kwargs.get("engine_id"),
+            "model": kwargs.get("model"),
+            "finish_reason": kwargs.get("finish_reason"),
+            "latency_ms": kwargs.get("latency_ms"),
+            "usage": kwargs.get("usage"),
+            "metadata": kwargs.get("metadata") or {},
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+        self.messages.append(message)
+        item["message_count"] = item["message_count"] + 1
+        if item["title"] == "New conversation" and message["role"] == "user":
+            item["title"] = message["content"][:120]
+        item["preview"] = message["content"][:160]
+        return dict(message)
+
+    # -- preferences / usage ---------------------------------------------
+    def get_preferences(self, *, client_id: str) -> dict[str, Any]:
+        stored = self.preferences.get(client_id)
+        return {
+            "client_id": client_id,
+            "preferences": dict(stored or {}),
+            "stored": stored is not None,
+        }
+
+    def set_preferences(self, *, client_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
+        self.preferences[client_id] = dict(preferences)
+        return {"client_id": client_id, "preferences": dict(preferences), "stored": True}
+
+    def record_usage(self, **kwargs: Any) -> dict[str, Any]:
+        self.counter += 1
+        record = {"id": self.counter, **kwargs}
+        self.usage.append(record)
+        return record
+
+    def usage_summary(self, *, client_id: str | None = None, limit: int = 50) -> dict[str, Any]:
+        rows = [row for row in self.usage if not client_id or row.get("client_id") == client_id]
+        return {
+            "totals": {"generations": len(rows), "total_tokens": 0},
+            "recent": rows[:limit],
+        }
+
+    def migrate(self, *, directory: str | None = None) -> dict[str, Any]:
+        return {"ok": True, "applied": [], "already_applied": [], "drift": [], "total": 0}
 
 
 class FakeEngine(ModelEngine):
@@ -226,14 +421,20 @@ def echo_dataset(tmp_path: Path) -> Path:
 
 __all__ = [
     "Capability",
+    "DATABASE_READY",
+    "DATABASE_REASON",
+    "DATABASE_URL_ENV",
     "FakeEngine",
     "LOCAL_MODEL_ID",
     "LOCAL_MODEL_READY",
     "LOCAL_MODEL_REASON",
+    "MemoryStore",
+    "REPO_MIGRATIONS_DIR",
     "REPO_ROOT",
     "TEST_TOOL_CALL_TEXT",
     "echo_dataset",
     "local_model_status",
+    "requires_database",
     "requires_local_model",
     "test_spec",
 ]

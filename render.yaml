@@ -1,0 +1,35 @@
+# Render Blueprint for the AlphaAI inference server (see docs/DEPLOY.md §9–10).
+#
+# Render is the shortest path to a real inference host: it builds
+# deploy/Dockerfile from this repository, attaches a persistent disk (the GGUF
+# weights, which are never committed, must survive a restart) and serves HTTPS
+# on *.onrender.com — no CLI and no local Docker required.
+#
+# Deploy: render.com → New → Blueprint → connect this repository. Then set the
+# prompted secret, and give the service at least 1 GB of RAM (the Starter plan's
+# 512 MB cannot hold the model: weights are ~0.9 GB resident).
+services:
+  - type: web
+    name: alphaai-inference
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    # A 200 from /api/health only after the API is up, so a broken instance fails
+    # the deploy instead of serving errors. Inference readiness is reported
+    # separately in the payload (inference.ready) and is never faked.
+    healthCheckPath: /api/health
+    # A persistent disk pins the service to a single instance; the container
+    # writes its weights, memory store, logs and tool sandbox under /data.
+    disk:
+      name: alphaai-data
+      mountPath: /data
+      sizeGB: 2
+    envVars:
+      # Shared secret this host requires from the Vercel gateway. Leave unset to
+      # serve /api/* without a token.
+      - key: ALPHAI_INFERENCE_TOKEN
+        sync: false
+      # Only needed when a browser calls this host from a different origin; the
+      # same-origin routing in vercel.json never does.
+      - key: ALPHAI_CORS_ORIGINS
+        sync: false

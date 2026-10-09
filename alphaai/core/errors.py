@@ -90,6 +90,45 @@ class InferenceUnreachableError(AlphaAIError):
 
 
 # ---------------------------------------------------------------------------
+# requests (client-supplied input the API refuses)
+# ---------------------------------------------------------------------------
+class InvalidRequestError(AlphaAIError):
+    """A request carried input AlphaAI will not act on (bad id, bad role)."""
+
+    code = "invalid_request"
+
+
+# ---------------------------------------------------------------------------
+# persistence (PostgreSQL / Supabase)
+# ---------------------------------------------------------------------------
+class DatabaseNotConfiguredError(AlphaAIError):
+    """Persistence was requested but no database is configured for this process.
+
+    Raised instead of pretending a conversation was saved. The API answers with
+    this code (HTTP 503) and the dashboard states it plainly; a chat that was not
+    asked to persist still succeeds without it.
+    """
+
+    code = "database_not_configured"
+
+
+class DatabaseUnavailableError(AlphaAIError):
+    """The configured database could not be used (driver, network, SQL, auth).
+
+    The failure is reported with the underlying cause rather than being retried
+    silently or replaced by an empty result.
+    """
+
+    code = "database_unavailable"
+
+
+class DatabaseNotFoundError(AlphaAIError):
+    """A conversation id was requested that does not exist for this client."""
+
+    code = "conversation_not_found"
+
+
+# ---------------------------------------------------------------------------
 # tools
 # ---------------------------------------------------------------------------
 class ToolError(AlphaAIError):

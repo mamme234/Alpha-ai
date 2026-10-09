@@ -260,6 +260,23 @@ def _apply_env(config: AlphaAIConfig, env: Mapping[str, str]) -> list[str]:
         get("ALPHAI_INFERENCE_TOKEN") or get("ALPHA_INFERENCE_TOKEN"),
     )
     set_field(config.api, "inference_timeout_s", get("ALPHAI_INFERENCE_TIMEOUT_S"), float)
+
+    # database / persistence. DATABASE_URL is the documented, platform-provided
+    # name (Vercel, Render, Railway and Supabase's own UI all hand out
+    # DATABASE_URL); ALPHAI_DATABASE_URL exists so two databases can be told
+    # apart in one environment, and it wins when both are present.
+    set_field(
+        config.database,
+        "url",
+        get("ALPHAI_DATABASE_URL") or get("DATABASE_URL"),
+    )
+    set_field(config.database, "ssl_mode", get("ALPHAI_DB_SSL_MODE"))
+    set_field(config.database, "connect_timeout_s", get("ALPHAI_DB_CONNECT_TIMEOUT_S"), float)
+    set_field(config.database, "statement_timeout_ms", get("ALPHAI_DB_STATEMENT_TIMEOUT_MS"), int)
+    set_field(config.database, "application_name", get("ALPHAI_DB_APPLICATION_NAME"))
+    set_field(config.database, "max_list_limit", get("ALPHAI_DB_MAX_LIST_LIMIT"), int)
+    set_field(config.database, "migrate_on_start", get("ALPHAI_DB_MIGRATE_ON_START"), bool)
+    set_field(config.paths, "migrations_dir", get("ALPHAI_MIGRATIONS_DIR"))
     return applied
 
 
@@ -293,6 +310,7 @@ def resolve_paths(config: AlphaAIConfig, *, create: bool = False) -> AlphaAIConf
         "state_dir",
         "workspace_dir",
         "log_dir",
+        "migrations_dir",
     ):
         setattr(config.paths, attr, _resolve_path(root, getattr(config.paths, attr)))
 
@@ -405,9 +423,21 @@ def public_config_view(config: AlphaAIConfig, *, redact_paths: bool | None = Non
     addresses models by id.
     """
 
+    # Imported here, not at module import time: ``alphaai.db`` pulls in
+    # ``alphaai.core.errors``, whose package initialiser imports this module — a
+    # top-level import would deadlock that cycle.
+    from ..db.base import database_public_view
+
     redact = config.api.redact_paths if redact_paths is None else redact_paths
     data = config.to_dict()
     root = config.paths.project_root
+    if isinstance(data.get("database"), dict):
+        # The raw DSN holds a password, and no client ever needs it: publish the
+        # connection facts instead of the credential.
+        data["database"] = {
+            **database_public_view(config.database),
+            "migrations_dir": config.paths.migrations_dir,
+        }
 
     def scrub(value: Any, key: str = "") -> Any:
         if any(part in key.lower() for part in _SENSITIVE_KEY_PARTS):

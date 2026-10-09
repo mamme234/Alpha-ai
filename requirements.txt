@@ -1,7 +1,7 @@
 # Production dependencies for the AlphaAI FastAPI service that managed hosting
 # (Vercel Services: `backend`, entrypoint `asgi:app`) installs.
 #
-# The same two packages are declared in pyproject.toml [project.dependencies]: a
+# The same packages are declared in pyproject.toml [project.dependencies]: a
 # platform may build from either manifest, and `asgi:app` imports FastAPI at
 # module load, so a missing entry here or there breaks every endpoint at once.
 #
@@ -12,3 +12,17 @@
 # ALPHAI_INFERENCE_URL.
 fastapi>=0.110
 uvicorn>=0.27
+
+# PostgreSQL driver for conversation history (Supabase or any PostgreSQL).
+#
+# AlphaAI talks the PostgreSQL protocol directly with DATABASE_URL — no Supabase
+# API key and no service-role key are involved. Without this driver the API still
+# serves every endpoint; only persistence answers `database_not_configured` /
+# `database_unavailable` with the exact remediation (see docs/DATABASE.md).
+#
+# Which deployment needs it: whichever one owns DATABASE_URL. Set it here (Vercel)
+# when this service should serve history directly — use the *transaction pooler*
+# connection string (port 6543), because serverless functions are short-lived.
+# Set it on the long-lived inference host instead when that host should own the
+# data — there the direct connection (port 5432) or the session pooler is right.
+psycopg[binary]>=3.1

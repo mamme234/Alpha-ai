@@ -10,6 +10,7 @@ answer" guarantee without mocking inference itself.
 from __future__ import annotations
 
 import contextlib
+import copy
 import json
 import socket
 import threading
@@ -27,6 +28,10 @@ from alphaai.api import resolve_mode
 from alphaai.api.app import create_app
 from alphaai.api.gateway import inference_host, normalize_inference_url
 from alphaai.config.loader import load_config
+from alphaai.config.schema import AlphaAIConfig
+from alphaai.core.runtime import AlphaRuntime
+
+from .conftest import FakeEngine, test_spec
 
 # ---------------------------------------------------------------------------
 # a real HTTP server standing in for the AlphaAI inference host
@@ -382,3 +387,151 @@ def test_invalid_inference_url_is_rejected(tmp_path) -> None:
     with pytest.raises(Exception) as excinfo:
         load_config(project_root=str(root), env={"ALPHAI_INFERENCE_URL": "infer.example.com"})
     assert "inference_url" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# the shared secret is really required (ALPHAI_INFERENCE_TOKEN)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def protected_inference(config: AlphaAIConfig) -> Iterator[FastAPI]:
+    """A real AlphaAI inference server that requires the shared token."""
+
+    config.api.inference_token = "shared-secret"
+    runtime = AlphaRuntime.create(config, discover=False)
+    runtime.registry.register(FakeEngine(test_spec(), config))
+    app = create_app(config, runtime=runtime)
+    try:
+        yield app
+    finally:
+        runtime.close()
+
+
+def test_inference_host_without_the_token_refuses_api_calls(protected_inference) -> None:
+    with TestClient(protected_inference) as client:
+        response = client.get("/api/health")
+    assert response.status_code == 401
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["www-authenticate"] == "Bearer"
+    error = response.json()["error"]
+    assert error["code"] == "unauthorized"
+    assert "ALPHAI_INFERENCE_TOKEN" in error["message"] + error["remediation"]
+    # Nothing about the model was invented for an unauthenticated caller.
+    assert "inference" not in response.json()
+
+
+def test_inference_host_rejects_a_wrong_token(protected_inference) -> None:
+    with TestClient(protected_inference) as client:
+        response = client.get("/api/health", headers={"Authorization": "Bearer wrong"})
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+
+
+def test_inference_host_accepts_the_gateway_token(protected_inference) -> None:
+    with TestClient(protected_inference) as client:
+        response = client.get(
+            "/api/health", headers={"Authorization": "Bearer shared-secret"}
+        )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+
+
+def test_the_token_locks_the_api_not_the_dashboard_page(protected_inference) -> None:
+    """The page still loads; its ``/api/*`` calls are what the token protects."""
+
+    with TestClient(protected_inference) as client:
+        assert client.get("/").status_code == 200
+        assert client.post("/api/chat", json={"message": "hi"}).status_code == 401
+
+
+def test_no_token_configured_means_no_lock(config) -> None:
+    config.api.inference_token = ""
+    with TestClient(create_app(config)) as client:
+        assert client.get("/api/health").status_code == 200
+
+
+def test_gateway_token_reaches_a_protected_inference_host(config, protected_inference) -> None:
+    """End to end: gateway (holding the token) -> protected AlphaAI server."""
+
+    with running_server(protected_inference) as origin:
+        with TestClient(create_app(config, inference_url=origin)) as client:
+            health = client.get("/api/health")
+            assert health.status_code == 200
+            assert health.json()["gateway"]["reachable"] is True
+            chat = client.post("/api/chat", json={"message": "hello"})
+    assert chat.status_code == 200
+    assert chat.json()["text"] == "alphaai test reply"
+
+
+def test_gateway_without_the_token_cannot_reach_a_protected_host(config, protected_inference) -> None:
+    """No shared secret, no inference — and the refusal is passed through."""
+
+    tokenless = copy.deepcopy(config)
+    tokenless.api.inference_token = ""
+    with running_server(protected_inference) as origin:
+        with TestClient(create_app(tokenless, inference_url=origin)) as client:
+            response = client.post("/api/chat", json={"message": "hello"})
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "unauthorized"
+    assert "text" not in response.json()
+
+
+# ---------------------------------------------------------------------------
+# https + timeout plumbing
+# ---------------------------------------------------------------------------
+
+
+def test_gateway_uses_the_https_scheme_and_the_configured_timeout(config, monkeypatch) -> None:
+    """The gateway calls the inference host exactly as configured.
+
+    ``urlopen`` is replaced for the duration of the test so the request that
+    would go over TLS is inspected: an ``https://`` base URL is kept as HTTPS
+    (stdlib certificate verification applies), and ``ALPHAI_INFERENCE_TIMEOUT_S``
+    is the socket timeout. A timeout is reported as ``inference_unreachable``.
+    """
+
+    config.api.inference_token = ""
+    config.api.inference_timeout_s = 4.5
+    calls: list[tuple[str, float | None]] = []
+
+    def fake_urlopen(request, timeout=None):
+        calls.append((request.full_url, timeout))
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr("alphaai.api.gateway.urlrequest.urlopen", fake_urlopen)
+
+    with TestClient(
+        create_app(config, inference_url="https://inference.internal.example")
+    ) as client:
+        response = client.get("/api/health")
+
+    assert calls == [("https://inference.internal.example/api/health", 4.5)]
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "inference_unreachable"
+    assert error["details"]["inference_host"] == "inference.internal.example"
+    assert "could not be reached" in error["message"]
+
+
+def test_inference_timeout_from_the_environment(tmp_path) -> None:
+    root = tmp_path / "hosted"
+    root.mkdir()
+    loaded = load_config(
+        project_root=str(root),
+        env={
+            "ALPHAI_INFERENCE_URL": "https://inference.internal.example",
+            "ALPHAI_INFERENCE_TOKEN": "shared-secret",
+            "ALPHAI_INFERENCE_TIMEOUT_S": "7.5",
+        },
+    )
+    assert loaded.api.inference_token == "shared-secret"
+    assert loaded.api.inference_timeout_s == 7.5
+
+
+def test_invalid_inference_timeout_is_rejected(tmp_path) -> None:
+    root = tmp_path / "hosted"
+    root.mkdir()
+    with pytest.raises(Exception) as excinfo:
+        load_config(project_root=str(root), env={"ALPHAI_INFERENCE_TIMEOUT_S": "0"})
+    assert "inference_timeout_s" in str(excinfo.value)

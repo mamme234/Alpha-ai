@@ -36,7 +36,16 @@ dependencies = [
 
 [project.optional-dependencies]
 api = ["fastapi>=0.110", "uvicorn>=0.27"]
-tests = ["pytest>=7.4"]
+# Conversation persistence in PostgreSQL (Supabase hosted, or any PostgreSQL).
+# This is the only database dependency AlphaAI has: the server speaks the
+# PostgreSQL protocol directly with DATABASE_URL, so no Supabase API key (and no
+# service-role key) is ever needed. Install it on whichever deployment owns the
+# data — see docs/DATABASE.md.
+db = ["psycopg[binary]>=3.1"]
+# `pgserver` is optional: when it is installed the persistence tests start a
+# private PostgreSQL automatically instead of skipping. ALPHAI_TEST_DATABASE_URL
+# points them at an existing database instead.
+tests = ["pytest>=7.4", "psycopg[binary]>=3.1"]
 
 # ---------------------------------------------------------------------------
 # Model runtime extras. AlphaAI never installs or downloads a model on its own:
@@ -85,6 +94,7 @@ packages = [
   "alphaai.core",
   "alphaai.core.skills",
   "alphaai.core.tools",
+  "alphaai.db",
   "alphaai.engines",
   "alphaai.training",
 ]

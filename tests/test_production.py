@@ -303,6 +303,62 @@ def test_vercel_routes_the_api_before_the_frontend_catch_all() -> None:
 
 
 # ---------------------------------------------------------------------------
+# the inference host configuration
+# ---------------------------------------------------------------------------
+
+
+def _repo_file(name: str) -> str:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    return (root / name).read_text(encoding="utf-8")
+
+
+def test_render_blueprint_builds_the_inference_image_with_a_persistent_disk() -> None:
+    """The inference host needs a Dockerfile build plus storage that persists.
+
+    The GGUF weights are downloaded on first boot and are never committed, so
+    without a disk a restart would lose them; and the service must not scale to
+    zero while a model is resident.
+    """
+
+    text = _repo_file("render.yaml")
+    assert "runtime: docker" in text
+    assert "dockerfilePath: ./deploy/Dockerfile" in text
+    assert "dockerContext: ." in text
+    assert "mountPath: /data" in text
+    assert "healthCheckPath: /api/health" in text
+    # Secrets are supplied by the operator at deploy time, never defaulted in.
+    assert "ALPHAI_INFERENCE_TOKEN" in text
+    assert text.count("sync: false") == 2
+
+
+def test_no_model_weights_are_committed_anywhere() -> None:
+    """Weights are installed onto the host's volume, never into the repository.
+
+    A local install legitimately exists in ``models/`` (and training runs write
+    checkpoints): both are gitignored, and the hosting upload excludes them. No
+    weights file may be tracked by git.
+    """
+
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    ignored = _repo_file(".vercelignore")
+    assert "*.gguf" in ignored and "models/" in ignored
+    gitignore = _repo_file(".gitignore")
+    assert "models/*/" in gitignore
+    assert "checkpoints/**/model.pt" in gitignore
+
+    weight_suffixes = {".gguf", ".safetensors", ".pt", ".bin"}
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    assert [name for name in tracked if Path(name).suffix in weight_suffixes] == []
+
+
+# ---------------------------------------------------------------------------
 # the hosting entrypoint (asgi:app)
 # ---------------------------------------------------------------------------
 

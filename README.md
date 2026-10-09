@@ -14,7 +14,8 @@ orchestrator, and a training foundation for future AlphaAI-owned weights.
 
 [Architecture](docs/ARCHITECTURE.md) · [Engines](docs/ENGINES.md) ·
 [Tools](docs/TOOLS.md) · [Skills](docs/SKILLS.md) · [Training](docs/TRAINING.md) ·
-[API](docs/API.md) · [Deploying](docs/DEPLOY.md)
+[API](docs/API.md) · [Deploying](docs/DEPLOY.md) ·
+[Database](docs/DATABASE.md)
 
 </div>
 
@@ -220,6 +221,25 @@ API and everything else to the static frontend with no client-side hostname.
 When the API runs on a host without a persistent disk, set
 `ALPHAI_INFERENCE_URL` to a real `alphaai serve` instance: the API then forwards
 inference instead of loading weights locally (see [`docs/DEPLOY.md`](docs/DEPLOY.md)).
+
+## Conversation history (PostgreSQL / Supabase)
+
+Chat threads are stored in PostgreSQL when a database is configured, and the API
+is honest when one is not: the history endpoints answer `database_not_configured`
+with the fix instead of an empty list, and every chat response reports whether
+the turn was saved. Model weights are never stored in the database, no Supabase
+API key is used (only `DATABASE_URL`), and row level security is enabled on every
+table.
+
+```shell
+cp env.example .env            # variable names, empty values
+# set DATABASE_URL, then:
+alphaai db status              # configured? reachable? migrations applied/pending/drift
+alphaai db migrate             # apply supabase/migrations (one transaction per file)
+```
+
+The schema, security model, connection methods (direct vs Supavisor pooler) and
+the Supabase/Vercel checklist are in [`docs/DATABASE.md`](docs/DATABASE.md).
 
 ## Testing
 

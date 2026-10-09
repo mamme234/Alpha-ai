@@ -90,7 +90,10 @@ docker run -d --name alphaai -p 8090:8090 \
 ```
 
 `deploy/entrypoint.sh` installs the model on first boot, skips it on every later
-start (the weights persist on the `/data` volume), then serves.
+start (the weights persist on the `/data` volume), then serves. With
+`ALPHAI_INFERENCE_TOKEN` set the container requires that secret on `/api/*`
+(section 4) — the gateway presents it, and only direct inspection needs the
+header.
 
 ## 4. Environment variables (inference host)
 
@@ -101,7 +104,7 @@ All of these are optional; defaults come from `configs/alphaai.toml`.
 | `PORT` | bind port injected by most hosts | `8090` |
 | `ALPHAI_HOST` | bind interface | `0.0.0.0` |
 | `ALPHAI_CORS_ORIGINS` | the deployed frontend origin(s), comma-separated | `https://your-project.vercel.app` |
-| `ALPHAI_INFERENCE_TOKEN` | shared secret the gateway must present | `<shared-secret>` |
+| `ALPHAI_INFERENCE_TOKEN` | shared secret this server requires from callers (the gateway) | `<shared-secret>` |
 | `ALPHAI_MODELS_DIR` | persistent directory for weights | `/data/models` |
 | `ALPHAI_STATE_DIR` | persistable runtime state | `/data/state` |
 | `ALPHAI_LOG_DIR` | log output directory | `/data/logs` |
@@ -116,6 +119,22 @@ All of these are optional; defaults come from `configs/alphaai.toml`.
 There are **no AI API keys** and no AI provider secrets anywhere in AlphaAI.
 `ALPHAI_INFERENCE_TOKEN`, when set, is a shared secret between two AlphaAI
 services — it authorises nothing external.
+
+It works on both sides of the hop:
+
+* on the **gateway**, it is sent with every forwarded request as
+  `Authorization: Bearer …`;
+* on the **inference host**, setting it makes the server *require* that header on
+  `/api/*` (and the API documentation routes) and answer `401 unauthorized` —
+  in AlphaAI's usual JSON error shape — to anything else. An unset token means
+  the API is served to any caller.
+
+Setting the token therefore locks the whole API of the inference host to callers
+that hold the secret, which is the point of a private inference host: the gateway
+holds it. A single-host deployment that also serves the browser dashboard must
+leave it unset, because a browser cannot present a shared secret — its `/api/*`
+calls would answer `401` (the dashboard page itself still loads, and shows that
+message).
 
 Set `ALPHAI_CORS_ORIGINS` to the real frontend origin when the browser and the
 API are on different origins. With the same-origin routing in section 5 the
@@ -169,14 +188,58 @@ browser never makes a cross-origin request and CORS is not exercised at all.
    | `ALPHAI_INFERENCE_URL` | `https://<your-inference-host>` — the base URL of the container from section 3 (alias: `ALPHA_INFERENCE_URL`) |
    | `ALPHAI_INFERENCE_TOKEN` | the same shared secret you set on the inference host (optional but recommended) |
    | `ALPHAI_CORS_ORIGINS` | only needed if a browser calls the API from another origin |
+   | `DATABASE_URL` | **optional** — conversation history. Use Supabase's *transaction pooler* string here (port 6543), or leave it unset and let the inference host own the database. See section 5b and [`DATABASE.md`](./DATABASE.md) |
 
-3. Deploy. Then verify (section 7) that
-   `GET https://<project>.vercel.app/api/health` reports
-   `inference.ready: true` **and** `gateway.reachable: true`.
+   No Supabase **API** key is needed anywhere (`SUPABASE_URL`,
+   `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are unused by AlphaAI),
+   and none may be exposed to the browser.
+
+3. **Redeploy** so the variables reach the `backend` service: *Deployments* →
+   the latest deployment → *Redeploy* (a new commit on the connected branch does
+   the same). Environment variables are read when a function is built, so a
+   deployment that started before the variable was added keeps running without
+   it.
+
+4. Verify (section 7) that `GET https://<project>.vercel.app/api/health`
+   reports `inference.ready: true` **and** `gateway.reachable: true`. Until the
+   variable is set the same endpoint answers 200 with
+   `"gateway": {"enabled": false}` and `inference.ready: false` — the two are
+   distinguishable on purpose, so a half-configured deployment cannot look
+   healthy.
 
 `ALPHAI_INFERENCE_URL` is the only wiring between the two tiers. Nothing in the
 source hard-codes a host: no `localhost`, no fixed port, no service hostname.
 It is never set to an AI provider — it must point at another AlphaAI server.
+
+### 5b. Conversation history (Supabase PostgreSQL) — optional
+
+History is a database concern, not an inference one, so it can live on either
+tier — whichever one has `DATABASE_URL` set. Full detail (schema, security, RLS,
+verification) is in [`DATABASE.md`](./DATABASE.md).
+
+The short version:
+
+1. Create a Supabase project and copy *Project Settings → Database → Connection
+   string → URI*, with your database password and `?sslmode=require`.
+2. Set `DATABASE_URL` on **one** deployment:
+   * on the **Vercel gateway**, use the **transaction pooler** (`…pooler.supabase.com:6543`) —
+     serverless functions are short-lived, so session state is not safe there; the
+     gateway then serves `/api/conversations*` itself;
+   * on the **inference host**, use the direct connection (`db.<ref>.supabase.co:5432`)
+     or Supavisor's session mode (port 5432).
+   Setting it on both makes each side own a different set of threads — pick one.
+3. Apply the schema:
+   * `alphaai db migrate` on the host (the image includes `supabase/`), or
+   * `supabase db push`, or
+   * `POST /api/database/migrate` against the running server.
+4. **Redeploy** the Vercel project if you set the variable there (environment
+   variables are read at build time), then confirm
+   `GET /api/database` reports `reachable: true` and `migrations.pending: []`.
+
+Until `DATABASE_URL` is set, nothing is broken and nothing is faked: `/api/health`
+adds `database: {configured: false}`, persistence requests answer 503
+`database_not_configured` with the fix, chat still answers, and every chat
+response says whether the turn was stored.
 
 ### Why there is no `inference` service in `vercel.json`
 
@@ -301,6 +364,22 @@ curl -sN -X POST "$API/api/chat/stream?format=ndjson" \
   -d '{"message": "Count to three."}'
 ```
 
+A real answer carries the model that produced it (`"text"`, `"engine"`,
+`"model"`, `"attribution"`). `503` with `no_suitable_model` or
+`inference_unreachable` means the chain is not connected yet — never that the
+answer was generated.
+
+Calling the **inference host** directly, when it requires the token, needs the
+header (`ALPHAI_INFERENCE_URL` + `/api/health` from the gateway needs nothing):
+
+```bash
+INFER=https://<your-inference-host>
+curl -s $INFER/api/health -H "Authorization: Bearer $ALPHAI_INFERENCE_TOKEN" | python3 -m json.tool
+# without the header the same endpoint answers 401 in JSON — that is the shared
+# secret working, not a broken deployment
+curl -s -o /dev/null -w '%{http_code}\n' $INFER/api/health   # 401 when a token is set
+```
+
 Routing and content type — every one of these must answer `application/json`,
 never `text/html` and never a platform error page:
 
@@ -363,3 +442,91 @@ the dashboard alone. The API and the inference server need a container host
 (Render, Railway, Fly.io, Hugging Face Spaces, or any Docker host) using
 `deploy/Dockerfile` and the variables above. Nothing in `alphaai` depends on any
 hosting platform: the same `alphaai serve` command runs everywhere.
+
+The container host must provide:
+
+* a **Dockerfile build** from this repository (so `pip` can install
+  `.[api,llama]` and the CPU llama.cpp wheel),
+* a **persistent volume** mounted at `/data` (the 491 MB GGUF is downloaded on
+  first boot and must survive restarts, along with `/data/state`),
+* **HTTPS ingress** on the port the container serves (8090, or `$PORT`), and
+* at least **~1 GB RAM** with a long-running (not scale-to-zero) service.
+
+### Shortest path: Render (Blueprint already in this repository)
+
+`render.yaml` at the repository root describes the inference host exactly: it
+builds `deploy/Dockerfile` with the repository root as the build context,
+attaches a 2 GB persistent disk at `/data`, checks `GET /api/health`, and prompts
+for the two variables a deployment has to decide.
+
+1. On Render: **New → Blueprint**, connect this repository. Render reads
+   `render.yaml` and shows the service it will create.
+2. Fill the prompted variables — `ALPHAI_INFERENCE_TOKEN` (recommended) and
+   `ALPHAI_CORS_ORIGINS` (not needed with same-origin routing) — and pick an
+   instance with **at least 1 GB of RAM**. Render's cheapest plan (0.5 CPU /
+   512 MB) cannot hold the ~0.9 GB resident model, and a persistent disk needs a
+   paid instance anyway.
+3. Apply. The first build installs `.[api,llama]` with the CPU llama.cpp wheel;
+   the first boot downloads the 491 MB GGUF onto the disk (a few minutes).
+4. Copy the service URL (`https://<service>.onrender.com`). That is
+   `ALPHAI_INFERENCE_URL`. Render terminates TLS and forces HTTPS on that host,
+   and it injects `$PORT`, which `alphaai serve` already honours.
+   Verify before wiring it up:
+
+   ```bash
+   curl -s https://<service>.onrender.com/api/health | python3 -m json.tool
+   # inference.ready must be true (a token-protected host needs the header)
+   ```
+
+### Alternative: Fly.io
+
+Fly runs the same image as a micro-VM with a volume. `fly.toml`:
+
+```toml
+app = "alphaai-inference"
+primary_region = "ord"
+
+[build]
+  dockerfile = "deploy/Dockerfile"
+
+[env]
+  PORT = "8090"          # keep the app and internal_port in agreement
+
+[http_service]
+  internal_port = 8090
+  force_https = true
+  auto_stop_machines = "off"   # never scale to zero: the weights stay resident
+  auto_start_machines = true
+
+[mounts]
+  source = "alphaai_data"
+  destination = "/data"
+```
+
+```sh
+fly volumes create alphaai_data --size 2 --region ord --app alphaai-inference
+fly deploy --app alphaai-inference --dockerfile deploy/Dockerfile
+fly open --app alphaai-inference           # https://alphaai-inference.fly.dev
+```
+
+## 10. What still has to happen outside this repository
+
+Everything in this repository is ready; three things are account-level actions
+that cannot be done from the source tree:
+
+1. **Run the inference image on a container host.** `deploy/Dockerfile` is the
+   supported image; build it from this repository and mount a volume at `/data`.
+   The GGUF weights are downloaded on first boot and are never committed.
+2. **Record its public HTTPS URL.** That URL is the value of
+   `ALPHAI_INFERENCE_URL`. Never use a temporary/workspace preview URL or an
+   AI provider — it must be the `alphaai serve` instance from step 1.
+3. **Set the variables on the Vercel project and redeploy** (section 5, step 3):
+   `ALPHAI_INFERENCE_URL`, plus `ALPHAI_INFERENCE_TOKEN` if the inference host
+   requires it. Conversation history is a separate, optional action: set
+   `DATABASE_URL` (Supabase) on one deployment and apply the migrations —
+   section 5b and [`DATABASE.md`](./DATABASE.md).
+
+Until step 3 is done the deployed gateway stays honest: `GET /api/health`
+answers 200 with `inference.ready: false`, `POST /api/chat` answers 503
+`no_suitable_model`, and `POST /api/chat/stream` emits a structured error event.
+No endpoint fabricates text, so there is nothing to "unfake" later.
