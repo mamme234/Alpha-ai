@@ -2,324 +2,930 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ALPHA AI — Intelligence, built from the ground up.</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#050506" />
+<meta name="description" content="ALPHA AI — one AI, endless possibilities. Local inference, real tools, honest status." />
+<title>ALPHA AI — One AI. Endless possibilities.</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070708'/%3E%3Ctext x='16' y='22' font-family='Helvetica,Arial' font-size='15' font-weight='700' text-anchor='middle' fill='%23d4af37'%3EA%3C/text%3E%3C/svg%3E" />
 <style>
+  /* =========================================================================
+     ALPHA AI — black and metallic gold.
+     Everything here is hand-written CSS with no build step, because this file
+     is the deployed frontend (vercel.json serves alphaai/api/static as the
+     `frontend` service) and must keep working from a plain file:// too.
+     Tokens first, then the shell, then the views.
+     ========================================================================= */
   :root {
-    --bg: #070b12;
-    --bg-elev: #0d1420;
-    --panel: #111a29;
-    --line: #1e2b40;
-    --ink: #e8eef8;
-    --muted: #8ea3bf;
-    --cyan: #35e0d0;
-    --amber: #ffb347;
-    --violet: #8b93ff;
-    --danger: #ff6b6b;
-    --ok: #4ade80;
-    --radius: 14px;
+    --bg: #050506;
+    --bg-soft: #08080a;
+    --panel: #0c0c0f;
+    --panel-2: #111114;
+    --panel-3: #16161a;
+    --line: #23232a;
+    --line-soft: #1a1a20;
+    --ink: #f2f1ec;
+    --ink-2: #c9c6bd;
+    --muted: #8b8880;
+    --muted-2: #6a6760;
+    --gold: #d4af37;
+    --gold-soft: #e8cf88;
+    --gold-bright: #f7e7a8;
+    --gold-deep: #8a6a1c;
+    --gold-line: rgba(212, 175, 55, .22);
+    --gold-line-strong: rgba(212, 175, 55, .42);
+    --gold-wash: rgba(212, 175, 55, .07);
+    --ok: #6ee7a8;
+    --warn: #e8b45f;
+    --danger: #f08c7a;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 20px 60px rgba(0, 0, 0, .55);
+    --sidebar: 264px;
+    --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   }
+
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
     background:
-      radial-gradient(1100px 620px at 12% -10%, #14324a 0%, transparent 60%),
-      radial-gradient(900px 520px at 88% 0%, #2b2350 0%, transparent 55%),
-      var(--bg);
+      radial-gradient(900px 520px at 78% -12%, rgba(212, 175, 55, .10) 0%, transparent 62%),
+      radial-gradient(700px 420px at 6% 4%, rgba(212, 175, 55, .05) 0%, transparent 58%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%);
     color: var(--ink);
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    line-height: 1.55;
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  a { color: var(--cyan); }
-  code, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
-  header.hero {
-    padding: 56px 24px 36px;
-    max-width: 1180px;
-    margin: 0 auto;
+  a { color: var(--gold-soft); text-decoration: none; }
+  a:hover { color: var(--gold-bright); }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  code, .mono { font-family: var(--mono); font-size: .88em; }
+  ::selection { background: rgba(212, 175, 55, .28); }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+
+  .skip-link {
+    position: absolute; left: -9999px; top: 8px; z-index: 100;
+    background: var(--panel-3); border: 1px solid var(--gold-line); padding: 8px 14px; border-radius: 8px;
   }
-  .eyebrow {
-    display: inline-flex; align-items: center; gap: 10px;
-    font-size: 12px; letter-spacing: .22em; text-transform: uppercase;
-    color: var(--cyan); border: 1px solid var(--line);
-    background: rgba(53,224,208,.06);
-    padding: 6px 12px; border-radius: 999px;
+  .skip-link:focus { left: 12px; }
+
+  /* ---------------------------------------------------------------- shell */
+  .app { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: 100%; }
+  .sidebar {
+    position: sticky; top: 0; align-self: start; height: 100vh;
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 20px 16px 14px;
+    background: linear-gradient(180deg, #0a0a0c 0%, #07070a 100%);
+    border-right: 1px solid var(--line-soft);
+    overflow-y: auto; overscroll-behavior: contain;
   }
-  h1 {
-    font-size: clamp(44px, 8vw, 92px);
-    margin: 18px 0 6px; letter-spacing: -0.03em; line-height: .98;
-    background: linear-gradient(94deg, #ffffff 0%, var(--cyan) 46%, var(--violet) 100%);
+  .brand { display: flex; align-items: center; gap: 12px; padding: 2px 6px 18px; }
+  /* The repository's logo is the ALPHA AI wordmark (there is no image asset in
+     the tree). It is rendered as type, in gold, exactly as before this redesign
+     — no new symbol was invented for it. */
+  .brand-mark {
+    width: 38px; height: 38px; flex: 0 0 38px; border-radius: 11px;
+    display: grid; place-items: center;
+    background: linear-gradient(150deg, rgba(247, 231, 168, .16), rgba(138, 106, 28, .1));
+    border: 1px solid var(--gold-line-strong);
+    color: var(--gold-bright); font-weight: 800; font-size: 17px; letter-spacing: .02em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  }
+  .brand-text { min-width: 0; }
+  .brand-name {
+    font-size: 15px; font-weight: 800; letter-spacing: .26em; text-transform: uppercase;
+    background: linear-gradient(100deg, var(--gold-bright) 0%, var(--gold) 52%, #a9832a 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
+    white-space: nowrap;
   }
-  .tagline { font-size: clamp(17px, 2.2vw, 22px); color: var(--ink); margin: 0 0 10px; }
-  .attribution { color: var(--muted); font-size: 14px; }
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
-  .btn {
-    appearance: none; border: 1px solid var(--line); border-radius: 10px;
-    background: var(--panel); color: var(--ink); cursor: pointer;
-    padding: 11px 18px; font-size: 15px; transition: .18s ease;
+  .brand-sub { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-2); }
+
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-label {
+    font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted-2);
+    padding: 16px 8px 6px;
   }
-  .btn:hover { border-color: var(--cyan); transform: translateY(-1px); }
-  .btn.primary {
-    background: linear-gradient(94deg, var(--cyan), var(--violet));
-    border: none; color: #06101a; font-weight: 650;
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 9px 10px; border: 1px solid transparent; border-radius: var(--radius-sm);
+    background: transparent; color: var(--ink-2); cursor: pointer; text-align: left;
+    transition: background .16s ease, color .16s ease, border-color .16s ease;
   }
-  main { max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
-  section { margin: 44px 0; }
-  h2 { font-size: 20px; letter-spacing: .02em; margin: 0 0 4px; }
-  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
-  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .nav-item svg { width: 17px; height: 17px; flex: 0 0 17px; stroke: currentColor; fill: none; stroke-width: 1.5; opacity: .9; }
+  .nav-item .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-item:hover { background: rgba(255, 255, 255, .035); color: var(--ink); border-color: var(--line); }
+  .nav-item[aria-current="page"] {
+    background: linear-gradient(100deg, rgba(212, 175, 55, .13), rgba(212, 175, 55, .02));
+    border-color: var(--gold-line); color: var(--gold-bright);
+    box-shadow: inset 2px 0 0 var(--gold);
+  }
+  .nav-item[aria-current="page"] svg { opacity: 1; }
+  .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); flex: 0 0 6px; }
+  .nav-dot.on { background: var(--ok); box-shadow: 0 0 0 3px rgba(110, 231, 168, .12); }
+  .nav-dot.off { background: var(--warn); }
+  .nav-dot.none { background: var(--danger); }
+
+  .history { flex: 1; min-height: 90px; display: flex; flex-direction: column; }
+  .history-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; max-height: 34vh; padding-right: 2px; }
+  .history-empty { color: var(--muted-2); font-size: 12.5px; padding: 4px 10px 8px; }
+  .history-row {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 8px 10px; border-radius: var(--radius-sm); background: transparent; cursor: pointer;
+    border: 1px solid transparent; color: var(--ink-2); text-align: left;
+  }
+  .history-row:hover { background: rgba(255, 255, 255, .035); border-color: var(--line); }
+  .history-row.active { border-color: var(--gold-line); background: var(--gold-wash); color: var(--ink); }
+  .history-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+  .history-row .d { font-size: 11px; color: var(--muted-2); }
+  .icon-btn {
+    appearance: none; background: transparent; border: 1px solid transparent; color: var(--muted);
+    width: 26px; height: 26px; border-radius: 8px; cursor: pointer; display: grid; place-items: center; flex: 0 0 26px;
+  }
+  .icon-btn:hover { color: var(--danger); border-color: rgba(240, 140, 122, .3); background: rgba(240, 140, 122, .07); }
+  .sidebar-foot { border-top: 1px solid var(--line-soft); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-foot .tiny { font-size: 11px; color: var(--muted-2); line-height: 1.5; }
+
+  .main { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 22px; min-height: 62px;
+    background: rgba(6, 6, 8, .82); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .hamburger { display: none; }
+  .topbar h1 { font-size: 15px; font-weight: 600; letter-spacing: .04em; margin: 0; color: var(--ink); }
+  .topbar .spacer { flex: 1; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px;
+    font-size: 12px; color: var(--ink-2); background: var(--panel); white-space: nowrap;
+  }
+  .status-pill strong { font-weight: 600; }
+  .topbar .model-chip {
+    font-size: 11.5px; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 11px; background: var(--panel); max-width: 42vw;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  main { flex: 1; width: 100%; max-width: 1080px; margin: 0 auto; padding: 26px 22px 40px; }
+  .view[hidden] { display: none; }
+  .view-head { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .view-head h2 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  .view-head p { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 70ch; }
+
+  /* ---------------------------------------------------------------- cards */
   .card {
-    background: linear-gradient(180deg, rgba(255,255,255,.03), transparent), var(--bg-elev);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .022), rgba(255, 255, 255, 0)) , var(--panel);
     border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
   }
-  .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
-  .card .v { font-size: 30px; font-weight: 650; margin-top: 6px; }
-  .card .d { color: var(--muted); font-size: 13px; margin-top: 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+  .card + .card { margin-top: 14px; }
+  .card h3 { margin: 0 0 4px; font-size: 15px; }
+  .card .hint { color: var(--muted); font-size: 13px; margin: 0; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 16px; }
+  .stat .k { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-2); }
+  .stat .v {
+    font-size: 26px; font-weight: 650; letter-spacing: -.02em; margin-top: 5px;
+    background: linear-gradient(120deg, var(--ink) 0%, var(--gold-soft) 120%);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .stat .v.plain { background: none; -webkit-text-fill-color: currentColor; color: var(--ink); }
+  .stat .d { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+
   .pill {
-    display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 999px;
-    border: 1px solid var(--line); color: var(--muted);
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted);
+    white-space: nowrap;
   }
-  .pill.ready, .pill.available { color: var(--ok); border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.08); }
-  .pill.unavailable, .pill.disabled { color: var(--amber); border-color: rgba(255,179,71,.35); background: rgba(255,179,71,.08); }
-  .pill.error { color: var(--danger); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.08); }
-  .console {
-    background: #060a11; border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 14px; min-height: 220px; max-height: 420px; overflow: auto; white-space: pre-wrap;
-    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px;
+  .pill.ready, .pill.available, .pill.saved { color: var(--ok); border-color: rgba(110, 231, 168, .35); background: rgba(110, 231, 168, .07); }
+  .pill.unavailable, .pill.partial { color: var(--warn); border-color: rgba(232, 180, 95, .35); background: rgba(232, 180, 95, .07); }
+  .pill.error, .pill.denied { color: var(--danger); border-color: rgba(240, 140, 122, .35); background: rgba(240, 140, 122, .07); }
+  .pill.off { color: var(--muted-2); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { color: var(--muted-2); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sub { color: var(--muted); font-size: 12.5px; }
+
+  /* ---------------------------------------------------------------- hero */
+  .hero { padding: 22px 4px 6px; text-align: center; }
+  .hero .mark {
+    width: 62px; height: 62px; margin: 0 auto 16px; border-radius: 18px;
+    display: grid; place-items: center; font-size: 26px; font-weight: 800; color: var(--gold-bright);
+    background: linear-gradient(150deg, rgba(247, 231, 168, .14), rgba(138, 106, 28, .08));
+    border: 1px solid var(--gold-line-strong);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 12px 34px rgba(0, 0, 0, .4);
   }
-  .console .you { color: var(--cyan); }
-  .console .ai { color: var(--ink); }
-  .console .sys { color: var(--muted); }
-  .console .err { color: var(--danger); }
-  .row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-  input[type=text], textarea, select {
-    flex: 1; min-width: 220px; background: var(--panel); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; font-size: 14.5px;
+  .hero h2 {
+    margin: 0 0 6px; font-size: clamp(24px, 4.4vw, 34px); font-weight: 650; letter-spacing: -.02em;
+    background: linear-gradient(100deg, var(--gold-bright), var(--gold) 60%, #b8933a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  textarea { min-height: 74px; resize: vertical; font-family: inherit; }
-  details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 10px; background: var(--bg-elev); }
-  summary { cursor: pointer; color: var(--muted); }
-  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; padding: 26px 24px 60px; }
-  footer .inner { max-width: 1180px; margin: 0 auto; }
-  .two { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
-  .badge-line { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .hero p { margin: 0 auto 4px; color: var(--ink-2); font-size: 15px; max-width: 46ch; }
+  .hero .hint { color: var(--muted); font-size: 13px; }
+
+  /* ------------------------------------------------------------- composer */
+  .composer {
+    display: flex; align-items: flex-end; gap: 10px;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line); border-radius: 22px;
+    padding: 10px 10px 10px 16px; margin: 22px 0 10px;
+    transition: border-color .18s ease, box-shadow .18s ease;
+  }
+  .composer:focus-within { border-color: var(--gold-line-strong); box-shadow: 0 0 0 4px rgba(212, 175, 55, .07); }
+  .composer textarea {
+    flex: 1; min-height: 26px; max-height: 190px; resize: none; border: none; background: transparent;
+    padding: 8px 0; font-size: 15.5px; line-height: 1.5; outline: none;
+  }
+  .composer textarea::placeholder { color: var(--muted-2); }
+  .send {
+    appearance: none; border: 1px solid rgba(247, 231, 168, .5); cursor: pointer;
+    width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%;
+    background: linear-gradient(140deg, var(--gold-bright) 0%, var(--gold) 55%, #a9832a 100%);
+    color: #17130a; display: grid; place-items: center;
+    transition: transform .14s ease, filter .14s ease;
+  }
+  .send:hover { transform: translateY(-1px); filter: brightness(1.06); }
+  .send:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .send.stop { background: linear-gradient(140deg, #f3b8ab, #d9715c); border-color: rgba(240, 140, 122, .5); color: #1b0d09; }
+  .send svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.9; }
+  .composer-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; margin-bottom: 6px; }
+  .toggles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .toggle {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2);
+    border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 11px; cursor: pointer;
+  }
+  .toggle input { accent-color: var(--gold); margin: 0; }
+  .toggle:hover { border-color: var(--gold-line); }
+  select.engine {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 11px; font-size: 12.5px; color: var(--ink-2); max-width: 260px;
+  }
+  .kbhint { font-size: 11.5px; color: var(--muted-2); }
+
+  .notice {
+    display: flex; gap: 10px; align-items: flex-start;
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--panel); padding: 11px 13px; font-size: 13px; color: var(--ink-2);
+  }
+  .notice.warn { border-color: rgba(232, 180, 95, .3); background: rgba(232, 180, 95, .05); }
+  .notice.err { border-color: rgba(240, 140, 122, .3); background: rgba(240, 140, 122, .05); }
+  .notice strong { color: var(--ink); }
+
+  /* --------------------------------------------------------------- thread */
+  .thread { display: flex; flex-direction: column; gap: 18px; margin-top: 8px; }
+  .turn { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+    font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  }
+  .turn.user .avatar { background: var(--panel-3); border: 1px solid var(--line); color: var(--ink-2); }
+  .turn.assistant .avatar {
+    background: linear-gradient(140deg, rgba(247, 231, 168, .16), rgba(138, 106, 28, .1));
+    border: 1px solid var(--gold-line); color: var(--gold-bright);
+  }
+  .bubble { min-width: 0; padding-top: 4px; }
+  .bubble .who { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 5px; }
+  .bubble .body { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+  .turn.user .bubble .body { color: var(--ink-2); }
+  .bubble pre {
+    background: #07070a; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    padding: 12px 13px; overflow-x: auto; margin: 10px 0; font-size: 13px; line-height: 1.55;
+  }
+  .bubble code.inline { background: rgba(212, 175, 55, .1); border: 1px solid var(--gold-line); border-radius: 5px; padding: 1px 5px; }
+  .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 9px; font-size: 12px; color: var(--muted-2); }
+  .cursor { display: inline-block; width: 8px; height: 16px; vertical-align: -2px; margin-left: 2px; background: var(--gold); opacity: .8; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------------------------------------------------------- capability cards */
+  .features { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); margin-top: 12px; }
+  .feature {
+    text-align: left; cursor: pointer; appearance: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .02), rgba(255, 255, 255, 0)), var(--panel);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+    transition: border-color .16s ease, transform .16s ease, background .16s ease;
+    display: flex; flex-direction: column; gap: 8px; min-height: 118px;
+  }
+  .feature:hover { border-color: var(--gold-line); transform: translateY(-2px); }
+  .feature .ico {
+    width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
+    background: rgba(212, 175, 55, .08); border: 1px solid var(--gold-line); color: var(--gold-soft);
+  }
+  .feature .ico svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+  .feature .t { font-size: 13.5px; font-weight: 600; }
+  .feature .s { font-size: 11.5px; color: var(--muted); margin-top: auto; }
+
+  /* ---------------------------------------------------------------- mobile */
+  .scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, .62); z-index: 30; border: 0; }
+  .scrim[hidden] { display: none; }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .sidebar {
+      position: fixed; z-index: 40; top: 0; left: 0; height: 100dvh; width: min(84vw, 306px);
+      transform: translateX(-102%); transition: transform .22s ease;
+      box-shadow: var(--shadow);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .hamburger { display: grid; }
+    .topbar { padding: 10px 14px; gap: 9px; min-height: 58px; }
+    .topbar .model-chip { display: none; }
+    main { padding: 18px 14px 34px; }
+    .composer { border-radius: 18px; padding: 8px 8px 8px 14px; }
+    .thread { gap: 15px; }
+    .turn { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+    .avatar { width: 28px; height: 28px; border-radius: 9px; font-size: 11px; }
+    .view-head h2 { font-size: 19px; }
+    .history-list { max-height: 26vh; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    .cursor { animation: none; opacity: .6; }
+  }
+
+  footer.site {
+    border-top: 1px solid var(--line-soft); margin-top: 30px; padding: 22px 22px 34px;
+    color: var(--muted-2); font-size: 12px;
+  }
+  footer.site .inner { max-width: 1080px; margin: 0 auto; display: grid; gap: 6px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
 </style>
 </head>
 <body>
-<header class="hero">
-  <span class="eyebrow">AlphaAI Core · local inference only</span>
-  <h1>ALPHA&nbsp;AI</h1>
-  <p class="tagline">Intelligence, built from the ground up.</p>
-  <p class="attribution" id="attribution">AlphaAI powered by DeepSeek-V3 — loading attribution…</p>
-  <div class="cta">
-    <button class="btn primary" onclick="document.getElementById('chat').scrollIntoView({behavior:'smooth'})">Open the console</button>
-    <button class="btn" onclick="refreshAll()">Refresh status</button>
-    <a class="btn" href="/api/models" target="_blank" rel="noreferrer">GET /api/models</a>
-    <a class="btn" href="/docs" target="_blank" rel="noreferrer">API docs</a>
-  </div>
-</header>
+<a class="skip-link" href="#main">Skip to content</a>
 
-<main>
-  <section>
-    <h2>Runtime</h2>
-    <p class="sub">Everything below is measured on this machine right now — no simulated numbers.</p>
-    <div class="grid" id="stats">
-      <div class="card"><div class="k">Engines</div><div class="v" id="stat-engines">–</div><div class="d" id="stat-engines-d">registered</div></div>
-      <div class="card"><div class="k">Usable now</div><div class="v" id="stat-usable">–</div><div class="d">with weights + runtime present</div></div>
-      <div class="card"><div class="k">Skills</div><div class="v" id="stat-skills">–</div><div class="d" id="stat-skills-d"></div></div>
-      <div class="card"><div class="k">Tools</div><div class="v" id="stat-tools">–</div><div class="d" id="stat-tools-d"></div></div>
-      <div class="card"><div class="k">Memory entries</div><div class="v" id="stat-memory">–</div><div class="d">sqlite, local</div></div>
-    </div>
-    <details><summary>Hardware report</summary><div class="console" id="hardware">…</div></details>
-  </section>
-
-  <section>
-    <h2>Engines</h2>
-    <p class="sub">An engine is real only when its runtime and its weights are both present. AlphaAI never downloads weights for you.</p>
-    <div class="card" style="overflow:auto">
-      <table>
-        <thead><tr><th>Model</th><th>Engine</th><th>Status</th><th>Owner</th><th>Why it cannot run</th></tr></thead>
-        <tbody id="engines"><tr><td colspan="5" class="sub">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <h2>Console</h2>
-    <p class="sub">A real request to <code class="mono">POST /api/chat/stream</code>. If no engine can serve it, AlphaAI says exactly why.</p>
-    <div class="console" id="chat"></div>
-    <div class="row">
-      <textarea id="prompt" placeholder="Ask AlphaAI… e.g. 'calculate (3.5 ** 2 + 41) / 7' — the calculator tool needs no model."></textarea>
-    </div>
-    <div class="row">
-      <select id="engine"><option value="">Auto-route</option></select>
-      <label class="pill"><input type="checkbox" id="tools" checked /> tools</label>
-      <label class="pill"><input type="checkbox" id="memory" checked /> memory</label>
-      <button class="btn primary" id="send">Send</button>
-      <button class="btn" onclick="clearConsole()">Clear</button>
-    </div>
-  </section>
-
-  <section>
-    <div class="two">
-      <div>
-        <h2>Skills</h2>
-        <p class="sub">Real computation, files, network and engine-backed capabilities.</p>
-        <div class="card" style="overflow:auto"><table><tbody id="skills"><tr><td class="sub">Loading…</td></tr></tbody></table></div>
-      </div>
-      <div>
-        <h2>Tools</h2>
-        <p class="sub">Deny-by-default. A tool shows the exact permission decision AlphaAI applies.</p>
-        <div class="card" style="overflow:auto"><table><tbody id="tools-list"><tr><td class="sub">Loading…</td></tr></tbody></table></div>
+<div class="app">
+  <!-- ===================================================== sidebar -->
+  <aside class="sidebar" id="sidebar" aria-label="AlphaAI navigation">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">A</div>
+      <div class="brand-text">
+        <div class="brand-name">Alpha AI</div>
+        <div class="brand-sub">One AI. Endless possibilities.</div>
       </div>
     </div>
-  </section>
-</main>
 
-<footer>
-  <div class="inner">
-    <p><strong>ALPHA AI</strong> is the system layer: model router, conversation engine, context manager, tool engine, skills, memory, agent orchestrator, API and training foundation.</p>
-    <p id="attribution-long"></p>
-    <p>Vendored components and licenses preserved in this repository: <code class="mono">LICENSE-CODE</code> (MIT, DeepSeek),
-      <code class="mono">LICENSE-MODEL</code> (DeepSeek Model License), <code class="mono">NOTICE</code>, <code class="mono">ATTRIBUTION.md</code>.</p>
+    <nav class="nav" aria-label="Workspaces">
+      <button class="nav-item" data-nav="chat" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.5-4.8A8 8 0 1 1 21 12Z"/></svg>
+        <span class="label">Chat</span><span class="nav-dot" data-dot="chat"></span>
+      </button>
+      <button class="nav-item" data-nav="images" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l4.5-4.5L12 16l3-3 5 5"/></svg>
+        <span class="label">Image Generation</span><span class="nav-dot" data-dot="images"></span>
+      </button>
+      <button class="nav-item" data-nav="code" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 8-5 4 5 4M15 8l5 4-5 4"/></svg>
+        <span class="label">Code</span><span class="nav-dot" data-dot="code"></span>
+      </button>
+      <button class="nav-item" data-nav="research" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <span class="label">Research</span><span class="nav-dot" data-dot="research"></span>
+      </button>
+      <button class="nav-item" data-nav="data" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V5m0 14h14"/><path d="M9 15V9m4 6V7m4 8v-5"/></svg>
+        <span class="label">Data Analysis</span><span class="nav-dot" data-dot="data"></span>
+      </button>
+      <button class="nav-item" data-nav="files" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>
+        <span class="label">File Assistant</span><span class="nav-dot" data-dot="files"></span>
+      </button>
+      <button class="nav-item" data-nav="tools" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 18 3l3 3-3.5 3.5M6.5 14.5 3 18l3 3 3.5-3.5"/><circle cx="12" cy="12" r="2.5"/></svg>
+        <span class="label">Tools</span><span class="nav-dot" data-dot="tools"></span>
+      </button>
+      <button class="nav-item" data-nav="settings" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg>
+        <span class="label">Settings</span><span class="nav-dot" data-dot="settings"></span>
+      </button>
+    </nav>
+
+    <div class="history">
+      <div class="nav-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span>History</span>
+        <button class="icon-btn" id="new-chat" type="button" title="New chat" aria-label="New chat">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <div class="history-list" id="history-list" aria-live="polite">
+        <div class="history-empty">Checking conversation history…</div>
+      </div>
+    </div>
+
+    <div class="sidebar-foot">
+      <a class="tiny" href="/docs" target="_blank" rel="noreferrer">API documentation →</a>
+      <span class="tiny" id="sidebar-attr">AlphaAI — local inference only.</span>
+    </div>
+  </aside>
+  <button class="scrim" id="scrim" type="button" tabindex="-1" aria-label="Close navigation" hidden></button>
+
+  <!-- ======================================================= main -->
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Open navigation">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <h1 id="view-title">Chat</h1>
+      <span class="spacer"></span>
+      <span class="model-chip mono" id="active-model">checking runtime…</span>
+      <span class="status-pill" id="status-pill" role="status">
+        <span class="nav-dot" id="status-dot"></span><strong id="status-text">Checking…</strong>
+      </span>
+    </header>
+
+    <main id="main" tabindex="-1">
+
+      <!-- ============================================ chat -->
+      <section class="view" id="view-chat" aria-labelledby="view-title">
+        <div id="hero">
+          <div class="hero">
+            <div class="mark" aria-hidden="true">A</div>
+            <h2>Hello, I'm Alpha.</h2>
+            <p>How can I help you today?</p>
+            <p class="hint" id="hero-hint">Answers come from the AlphaAI engine running on your own inference host — never from an external AI provider.</p>
+          </div>
+          <div class="features" id="features"></div>
+        </div>
+
+        <div id="thread-wrap" hidden>
+          <div class="thread" id="thread" aria-live="polite" aria-label="Conversation"></div>
+        </div>
+
+        <form class="composer" id="composer" autocomplete="off">
+          <label class="sr-only" for="prompt">Message AlphaAI</label>
+          <textarea id="prompt" rows="1" placeholder="Ask me anything..."></textarea>
+          <button class="send" id="send" type="submit" aria-label="Send message" title="Send (Enter)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </button>
+        </form>
+        <div class="composer-foot">
+          <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="use-tools" checked /> tools</label>
+            <label class="toggle"><input type="checkbox" id="use-memory" checked /> memory</label>
+            <select class="engine" id="engine" aria-label="Model"></select>
+          </div>
+          <span class="kbhint">Enter to send · Shift+Enter for a new line · Stop cancels the stream</span>
+        </div>
+        <div id="chat-notices"></div>
+      </section>
+
+      <!-- ============================================ capability workspace -->
+      <section class="view" id="view-work" hidden>
+        <div class="view-head">
+          <div>
+            <h2 id="work-title">Workspace</h2>
+            <p id="work-sub"></p>
+          </div>
+        </div>
+        <div id="work-notice"></div>
+        <div class="card" style="margin-top:14px">
+          <h3>What this really does</h3>
+          <p class="hint" id="work-detail"></p>
+          <div class="table-wrap" style="margin-top:12px">
+            <table><thead><tr><th>Capability</th><th>Status</th><th>Detail</th></tr></thead>
+              <tbody id="work-skills"><tr><td colspan="3" class="sub">Loading…</td></tr></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Run it directly</h3>
+          <p class="hint">Executes the selected skill through <code class="mono">POST /api/skills/execute</code> with the JSON inputs you provide. The result below is the server's own output.</p>
+          <div class="composer-foot" style="margin-top:12px">
+            <div class="toggles">
+              <select class="engine" id="work-skill" aria-label="Skill"></select>
+            </div>
+          </div>
+          <textarea id="work-inputs" rows="5" class="mono" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:11px;" placeholder='{"expression": "2+2"}'></textarea>
+          <div class="composer-foot" style="margin-top:10px">
+            <button class="btn" id="work-run" type="button" style="appearance:none;cursor:pointer;background:linear-gradient(140deg,var(--gold-bright),var(--gold));color:#17130a;border:1px solid rgba(247,231,168,.5);border-radius:999px;padding:9px 18px;font-weight:600">Execute skill</button>
+            <span class="kbhint">Nothing is simulated: a failure is shown with its code and remediation.</span>
+          </div>
+          <pre id="work-output" class="mono" style="background:#07070a;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0 0;overflow:auto;max-height:340px" hidden></pre>
+        </div>
+      </section>
+
+      <!-- ============================================ models -->
+      <section class="view" id="view-models" hidden>
+        <div class="view-head">
+          <div>
+            <h2>Models &amp; engines</h2>
+            <p>Live status from <code class="mono">GET /api/models</code>. A model is usable only when its runtime and its weights are both present — AlphaAI never downloads weights for you and never marks a model available because files exist.</p>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Model</th><th>Engine</th><th>Status</th><th>Owner</th><th>Detail</th></tr></thead>
+            <tbody id="models-body"><tr><td colspan="5" class="sub">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================ skills -->
+      <section class="view" id="view-skills" hidden>
+        <div class="view-head">
+          <div><h2>Skills</h2><p>Real computation, text, document and engine-backed capabilities, exactly as the runtime reports them.</p></div>
+        </div>
+        <div class="card table-wrap">
+          <table><thead><tr><th>Skill</th><th>Status</th><th>Needs</th></tr></thead>
+            <tbody id="skills-body"><tr><td colspan="3" class="sub">Loading…</td></tr></tbody></table>
+        </div>
+      </section>
+
+      <!-- ============================================ tools -->
+      <section class="view" id="view-tools" hidden>
+        <div class="view-head">
+          <div><h2>Tools</h2><p>Deny-by-default and permission-checked. Each row shows the exact decision the policy engine applies, and you can execute a tool for real below.</p></div>
+        </div>
+        <div class="card table-wrap">
+          <table><thead><tr><th>Tool</th><th>Decision</th><th>Requirements</th><th></th></tr></thead>
+            <tbody id="tools-body"><tr><td colspan="4" class="sub">Loading…</td></tr></tbody></table>
+        </div>
+        <div class="card">
+          <h3>Execute a tool</h3>
+          <p class="hint">Sent to <code class="mono">POST /api/tools/execute</code>. A denied tool is refused by policy — the refusal is shown, not hidden.</p>
+          <div class="composer-foot" style="margin-top:12px">
+            <div class="toggles"><select class="engine" id="tool-id" aria-label="Tool"></select></div>
+          </div>
+          <textarea id="tool-args" rows="4" class="mono" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:11px;" placeholder='{"expression": "2+2"}'></textarea>
+          <div class="composer-foot" style="margin-top:10px">
+            <button class="btn" id="tool-run" type="button" style="appearance:none;cursor:pointer;background:linear-gradient(140deg,var(--gold-bright),var(--gold));color:#17130a;border:1px solid rgba(247,231,168,.5);border-radius:999px;padding:9px 18px;font-weight:600">Execute tool</button>
+          </div>
+          <pre id="tool-output" class="mono" style="background:#07070a;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0 0;overflow:auto;max-height:340px" hidden></pre>
+        </div>
+      </section>
+
+      <!-- ============================================ settings -->
+      <section class="view" id="view-settings" hidden>
+        <div class="view-head">
+          <div><h2>Settings</h2><p>What this deployment is actually configured to do. Values marked <em>server-controlled</em> are read from the server environment; this page shows them and does not pretend to change them.</p></div>
+        </div>
+        <div class="grid" id="settings-stats"></div>
+        <div class="card" style="margin-top:14px">
+          <h3>Conversation history (PostgreSQL / Supabase)</h3>
+          <p class="hint" id="db-detail">Checking…</p>
+          <div class="table-wrap" style="margin-top:12px">
+            <table><tbody id="db-body"></tbody></table>
+          </div>
+          <div class="composer-foot" style="margin-top:12px">
+            <button class="btn" id="db-refresh" type="button" style="appearance:none;cursor:pointer;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:8px 16px">Re-check database</button>
+            <button class="btn" id="db-migrate" type="button" style="appearance:none;cursor:pointer;background:transparent;border:1px solid var(--gold-line);color:var(--gold-soft);border-radius:999px;padding:8px 16px">Apply migrations</button>
+          </div>
+          <pre id="db-output" class="mono" style="background:#07070a;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0 0;overflow:auto;max-height:320px" hidden></pre>
+        </div>
+        <div class="card">
+          <h3>Effective configuration (secrets redacted)</h3>
+          <p class="hint">From <code class="mono">GET /api/config</code>. Paths and credentials are replaced by the server before they are sent.</p>
+          <pre id="config-view" class="mono" style="background:#07070a;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0 0;overflow:auto;max-height:340px">Loading…</pre>
+        </div>
+        <div class="card">
+          <h3>This machine</h3>
+          <p class="hint">Hardware and runtime as measured on the host answering this request, plus the attribution of the model that produced it.</p>
+          <pre id="hardware-view" class="mono" style="background:#07070a;border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0 0;overflow:auto;max-height:320px">Loading…</pre>
+        </div>
+      </section>
+
+      <!-- ============================================ image generation -->
+      <section class="view" id="view-images" hidden>
+        <div class="view-head"><div><h2>Image Generation</h2><p>Not available in this deployment.</p></div></div>
+        <div class="card">
+          <div class="notice warn"><span>◆</span><span><strong>This is a real state, not an error in the page.</strong> The AlphaAI deployment you are using serves text generation from an installed local model (llama.cpp + a GGUF instruct model). No image model, diffusion runtime or image service is installed, and AlphaAI does not call external AI APIs — so nothing is generated and nothing is faked here.</span></div>
+          <p class="hint" style="margin-top:14px">To make this view real you would install an image runtime on the inference host and expose it as a new AlphaAI capability. Until then, this workspace stays empty on purpose, and the API reports no image engine.</p>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="site">
+      <div class="inner">
+        <p id="attribution-long">AlphaAI is the system layer: model router, conversation engine, context manager, tool engine, skills, memory, agent orchestrator, API and training foundation.</p>
+        <p>Vendored components and licenses preserved in this repository: <code class="mono">LICENSE-CODE</code> (MIT, DeepSeek), <code class="mono">LICENSE-MODEL</code> (DeepSeek Model License), <code class="mono">NOTICE</code>, <code class="mono">ATTRIBUTION.md</code>.</p>
+      </div>
+    </footer>
   </div>
-</footer>
+</div>
 
 <script>
+"use strict";
+/* =============================================================================
+   ALPHA AI dashboard.
+
+   Rules this file follows, because the alternative is a nice-looking lie:
+
+   * Every panel renders what an endpoint really returned. A failure shows the
+     server's own code, message and remediation, and never leaves a panel on
+     "Loading…".
+   * The status indicator distinguishes *this page loaded* from *inference is
+     ready*. Green means a real model answered readiness; there is no cosmetic
+     "Online" badge.
+   * Chat uses POST /api/chat/stream, so text appears as the engine produces it,
+     and Stop aborts the request.
+   * Conversation history is Postgres (Supabase) through /api/conversations. When
+     no database is configured the UI says so with the exact fix instead of
+     showing an empty history that looks like "no conversations yet".
+   * Capabilities that are not connected (image generation) are labelled as not
+     connected. Nothing is generated to fill the space.
+   ============================================================================= */
+
 const $ = (id) => document.getElementById(id);
+const CLIENT_KEY = "alphaai.client_id";
 
-function write(text, cls) {
-  const box = $("chat");
-  const span = document.createElement("span");
-  span.className = cls || "sys";
-  span.textContent = text;
-  box.appendChild(span);
-  box.scrollTop = box.scrollHeight;
+/* ------------------------------------------------------------------ state */
+const state = {
+  clientId: getClientId(),
+  conversationId: null,
+  streaming: null,          // AbortController while a stream is open
+  health: null,
+  database: null,
+  skills: [],
+  tools: [],
+  models: [],
+  view: "chat",
+};
+
+/* ------------------------------------------------------------ small utils */
+function getClientId() {
+  try {
+    let id = localStorage.getItem(CLIENT_KEY);
+    if (!id) {
+      id = "client-" + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+      localStorage.setItem(CLIENT_KEY, id);
+    }
+    return id;
+  } catch (err) {
+    // Private mode / storage disabled: still usable, just not remembered.
+    return "client-" + String(Date.now()) + Math.random().toString(16).slice(2);
+  }
 }
-function clearConsole() { $("chat").textContent = ""; }
 
-// Every status panel below renders what the API actually returned. A failure is
-// shown as the failure it is (with the server's own message); nothing is
-// presented as data, and a panel never stays on "loading" once the request is done.
-function errorText(err) {
-  return err && err.message ? err.message : String(err);
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
 }
 
-function apiProblem(payload) {
+function problemOf(payload) {
   return payload && payload.error ? payload.error : null;
 }
 
-function problemMessage(problem) {
+function problemText(problem) {
+  if (!problem) return "";
   return problem.message + (problem.remediation ? " — " + problem.remediation : "");
-}
-
-function errorRow(cellCount, message) {
-  const tr = document.createElement("tr");
-  const td = document.createElement("td");
-  td.colSpan = cellCount;
-  td.className = "sub";
-  td.textContent = message;
-  tr.appendChild(td);
-  return tr;
 }
 
 async function getJSON(url) {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   const type = res.headers.get("content-type") || "";
   if (!type.includes("application/json")) {
-    // A hosting platform answers a crashed function with its own page. Report
-    // that verbatim instead of trying to read it as API data.
+    // A hosting platform answers a crashed function with a page of its own.
+    // Report that verbatim rather than pretending it is data.
     const text = await res.text();
-    const firstLine = text.trim().split("\n").find((line) => line.trim()) || "";
-    throw new Error(`${url} returned HTTP ${res.status} ${type || "without a content type"} instead of JSON${firstLine ? ": " + firstLine.slice(0, 200) : ""}`);
+    const first = text.trim().split("\n").find((line) => line.trim()) || "";
+    throw new Error(`${url} returned HTTP ${res.status} ${type || "without a content type"} instead of JSON${first ? ": " + first.slice(0, 200) : ""}`);
   }
-  return res.json();
+  const payload = await res.json();
+  return { ok: res.ok, status: res.status, payload };
 }
 
-async function loadMeta() {
-  try {
-    const [index, attribution] = await Promise.all([getJSON("/api"), getJSON("/api/attribution")]);
-    $("attribution").textContent = attribution.engine;
-    $("attribution-long").textContent = attribution.long;
-  } catch (err) {
-    $("attribution").textContent = "attribution unavailable — " + errorText(err);
+async function postJSON(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const type = res.headers.get("content-type") || "";
+  if (!type.includes("application/json")) {
+    const text = await res.text();
+    throw new Error(`${url} returned HTTP ${res.status} instead of JSON: ${text.slice(0, 200)}`);
   }
+  const payload = await res.json();
+  return { ok: res.ok, status: res.status, payload };
 }
 
-function showStatusError(message) {
-  for (const id of ["stat-engines", "stat-usable", "stat-skills", "stat-tools", "stat-memory"]) {
-    $(id).textContent = "—";
+function notice(target, kind, title, body) {
+  const wrap = $(target);
+  wrap.innerHTML = "";
+  const box = el("div", "notice" + (kind ? " " + kind : ""));
+  box.appendChild(el("span", "", "◆"));
+  const text = el("span");
+  text.appendChild(el("strong", "", title + " "));
+  text.appendChild(document.createTextNode(body));
+  box.appendChild(text);
+  wrap.appendChild(box);
+}
+
+function clearNotice(target) { $(target).innerHTML = ""; }
+
+/* ------------------------------------------------------------ navigation */
+const NAV = {
+  chat:     { view: "chat",     title: "Chat" },
+  images:   { view: "images",   title: "Image Generation" },
+  code:     { view: "work",     title: "Code" },
+  research: { view: "work",     title: "Research" },
+  data:     { view: "work",     title: "Data Analysis" },
+  files:    { view: "work",     title: "File Assistant" },
+  tools:    { view: "tools",    title: "Tools" },
+  settings: { view: "settings", title: "Settings" },
+};
+
+/* Which real skills back each workspace, and what the workspace can honestly
+   claim. `null` skills means the capability is not connected at all. */
+const WORKSPACES = {
+  code: {
+    headline: "Write, explain and fix code, and run the analysis skills for real.",
+    detail: "Chat answers come from the installed local model on the inference host. Code analysis (structure, complexity, issues) and code-generation prompts run through AlphaAI's real skill layer — nothing here calls an external coding API.",
+    skills: ["skill.code_analysis", "skill.tool_calling"],
+    prompt: "Review this code and explain what it does, then suggest concrete fixes:\n\n",
+  },
+  research: {
+    headline: "Answer from the local model, retrieving pages only when the runtime allows it.",
+    detail: "The web-research skill performs a real fetch and reports the URL it read. It requires the tool/network permission on the inference host; when that permission is off, the skill answers as unavailable with the exact policy decision instead of inventing sources.",
+    skills: ["skill.web_research", "skill.summarization", "skill.text_transform"],
+    prompt: "Research the following and tell me what is verifiable, with sources: ",
+  },
+  data: {
+    headline: "Analyse pasted data and compute real arithmetic.",
+    detail: "Data-analysis, reasoning and calculator skills execute locally on the server and return measured results — the calculator needs no model at all, so it works even before weights are installed.",
+    skills: ["skill.data_analysis", "skill.calculator", "skill.reasoning"],
+    prompt: "Analyse this dataset and tell me what it shows (include the numbers you used):\n\n",
+  },
+  files: {
+    headline: "Inspect files the server is allowed to read.",
+    detail: "File and document skills read from the tool sandbox on the inference host, bounded by the configured permission and root. A path outside the sandbox is refused by policy — that refusal is the real answer.",
+    skills: ["skill.file_analysis", "skill.document_processing"],
+    prompt: "Read the file I name and summarise it: ",
+  },
+};
+
+function showNav(key) {
+  const target = NAV[key] || NAV.chat;
+  state.view = key;
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    if (item.dataset.nav === key) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
+  $("view-title").textContent = target.title;
+  ["chat", "work", "models", "skills", "tools", "settings", "images"].forEach((name) => {
+    const section = $("view-" + name);
+    if (section) section.hidden = name !== target.view;
+  });
+  if (target.view === "work") renderWorkspace(key);
+  if (key === "tools") { renderTools(); renderSkills(); }
+  if (key === "settings") { renderSettings(); }
+  closeDrawer();
+  $("main").scrollTop = 0;
+  window.scrollTo({ top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
+}
+function prefersReduced() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/* ---------------------------------------------------------- mobile drawer */
+function openDrawer() {
+  $("sidebar").classList.add("open");
+  $("scrim").hidden = false;
+  $("hamburger").setAttribute("aria-expanded", "true");
+}
+function closeDrawer() {
+  $("sidebar").classList.remove("open");
+  $("scrim").hidden = true;
+  $("hamburger").setAttribute("aria-expanded", "false");
+}
+$("hamburger").addEventListener("click", () => {
+  if ($("sidebar").classList.contains("open")) closeDrawer(); else openDrawer();
+});
+$("scrim").addEventListener("click", closeDrawer);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if (state.streaming) stopStream();
+    else closeDrawer();
   }
-  $("stat-engines-d").textContent = message;
-  $("stat-skills-d").textContent = "";
-  $("stat-tools-d").textContent = "";
+});
+document.querySelectorAll(".nav-item").forEach((item) => {
+  item.addEventListener("click", () => showNav(item.dataset.nav));
+});
+
+/* ============================================================== health */
+function setStatus(kind, text) {
+  const dot = $("status-dot");
+  dot.className = "nav-dot " + (kind === "ready" ? "on" : kind === "api" ? "off" : "none");
+  $("status-text").textContent = text;
+  $("status-pill").title = text;
 }
 
 async function loadHealth() {
-  let payload;
+  let result;
   try {
-    payload = await getJSON("/api/health");
+    result = await getJSON("/api/health");
   } catch (err) {
-    showStatusError(errorText(err));
+    setStatus("error", "API unreachable");
+    state.health = null;
+    renderFeatures();
     return;
   }
-  const problem = apiProblem(payload);
-  if (problem) {
-    showStatusError(problemMessage(problem));
+  if (!result.ok) {
+    setStatus("error", "API error " + result.status);
     return;
   }
-  const health = payload;
-  $("stat-engines").textContent = health.engines.registered;
-  $("stat-usable").textContent = health.engines.usable;
-  const states = Object.entries(health.engines.states || {}).map(([k, v]) => `${v} ${k}`).join(" · ");
-  $("stat-engines-d").textContent = states || "registered";
-  $("stat-skills").textContent = health.skills.registered;
-  $("stat-skills-d").textContent = Object.keys(health.skills.categories || {}).length + " categories";
-  $("stat-tools").textContent = health.tools.registered;
-  $("stat-tools-d").textContent = health.tools.permitted + " permitted by policy";
-  $("stat-memory").textContent = health.memory.entries ?? "off";
-  $("hardware").textContent = (health.hardware_lines || []).join("\n");
+  const health = result.payload;
+  state.health = health;
+  state.database = health.database || null;
+
+  // Two independent facts: this API answered, and inference is ready.
+  const inference = health.inference || {};
+  const gateway = health.gateway || {};
+  if (inference.ready) {
+    setStatus("ready", "Inference ready");
+  } else if (gateway.enabled) {
+    setStatus("api", gateway.reachable === false ? "Inference host unreachable" : "Gateway · inference not ready");
+  } else {
+    setStatus("api", "API online · model not loaded");
+  }
+
+  const usable = state.models.filter((model) => (model.status || {}).usable);
+  const model = usable[0] || (inference.model ? { display_name: inference.model } : null);
+  $("active-model").textContent = model
+    ? (model.display_name || model.model || model.id) + (inference.runtime ? " · " + inference.runtime : "")
+    : "no model loaded";
+
+  renderFeatures();
+  const hint = $("hero-hint");
+  if (inference.ready) {
+    hint.textContent = "Answers come from " + (inference.model || "the installed local model") + " on your own inference host — never from an external AI provider.";
+  } else {
+    hint.textContent = "This deployment answers, but no model is loaded yet, so chat reports the exact reason instead of inventing an answer. See Settings for the runtime state.";
+  }
+  $("sidebar-attr").textContent = health.attribution && health.attribution.short ? health.attribution.short : "AlphaAI — local inference only.";
 }
 
-function stateClass(state) { return "pill " + state; }
-
+/* ============================================================== models */
 async function loadModels() {
-  const body = $("engines");
-  const select = $("engine");
-  let payload;
+  const body = $("models-body");
+  let result;
   try {
-    payload = await getJSON("/api/models");
-    const problem = apiProblem(payload);
-    if (problem) throw new Error(problemMessage(problem));
+    result = await getJSON("/api/models");
   } catch (err) {
     body.innerHTML = "";
-    body.appendChild(errorRow(5, "unavailable — " + errorText(err)));
-    select.innerHTML = '<option value="">inference unavailable</option>';
+    body.appendChild(rowSpan(5, "unavailable — " + err.message));
     return;
   }
-  body.innerHTML = "";
+  const problem = problemOf(result.payload);
+  if (problem) {
+    body.innerHTML = "";
+    body.appendChild(rowSpan(5, problemText(problem)));
+    return;
+  }
+  state.models = result.payload.models || [];
+  const select = $("engine");
+  const previous = select.value;
   select.innerHTML = '<option value="">Auto-route</option>';
-  if (!payload.models.length) {
-    // Honest empty state: this API hosts no model metadata of its own. A
-    // gateway deployment proxies the real list from ALPHAI_INFERENCE_URL.
-    body.appendChild(errorRow(5, "No models registered in this deployment — inference comes from ALPHAI_INFERENCE_URL."));
-    return;
+  body.innerHTML = "";
+  if (!state.models.length) {
+    body.appendChild(rowSpan(5, "No models are registered in this deployment. A gateway deployment proxies the real list from its inference host."));
   }
-  payload.models.forEach((model) => {
-    const tr = document.createElement("tr");
+  state.models.forEach((model) => {
     const status = model.status || {};
-    const caps = (model.capabilities || []).slice(0, 6).join(", ");
-    tr.innerHTML = `
-      <td><strong>${model.display_name || model.id}</strong><div class="sub mono">${model.id}</div>
-          <div class="badge-line">${(model.capabilities || []).map((c) => `<span class="pill">${c}</span>`).join("")}</div></td>
-      <td>${model.engine_name || model.engine}<div class="sub">${model.runtime || ""}</div></td>
-      <td><span class="${stateClass(status.state)}">${status.state}</span>${status.usable ? "" : ""}</td>
-      <td>${model.model_owner}<div class="sub">engine: ${model.engine_owner}</div></td>
-      <td>${(status.detail || "").slice(0, 220)}${status.remediation ? `<div class="sub"><strong>fix:</strong> ${status.remediation}</div>` : ""}</td>`;
+    const tr = document.createElement("tr");
+    const name = el("td");
+    name.appendChild(el("strong", "", model.display_name || model.id));
+    name.appendChild(el("div", "sub mono", model.id));
+    const caps = el("div", "meta");
+    (model.capabilities || []).slice(0, 5).forEach((cap) => caps.appendChild(el("span", "pill off", cap)));
+    name.appendChild(caps);
+
+    const engine = el("td");
+    engine.appendChild(document.createTextNode(model.engine_name || model.engine || ""));
+    engine.appendChild(el("div", "sub", model.runtime || ""));
+
+    const stateCell = el("td");
+    stateCell.appendChild(el("span", "pill " + (status.state || "off"), status.state || "unknown"));
+
+    const owner = el("td");
+    owner.appendChild(document.createTextNode(model.model_owner || "—"));
+    owner.appendChild(el("div", "sub", "engine: " + (model.engine_owner || "—")));
+
+    const detail = el("td");
+    detail.appendChild(document.createTextNode((status.detail || "").slice(0, 220)));
+    if (status.remediation) {
+      const fix = el("div", "sub");
+      fix.appendChild(el("strong", "", "fix: "));
+      fix.appendChild(document.createTextNode(status.remediation));
+      detail.appendChild(fix);
+    }
+    tr.append(name, engine, stateCell, owner, detail);
     body.appendChild(tr);
+
     if (status.usable) {
       const option = document.createElement("option");
       option.value = model.id;
@@ -327,115 +933,727 @@ async function loadModels() {
       select.appendChild(option);
     }
   });
+  if (previous) select.value = previous;
+  renderFeatures();
 }
 
+function rowSpan(count, message) {
+  const tr = document.createElement("tr");
+  const td = el("td", "sub", message);
+  td.colSpan = count;
+  tr.appendChild(td);
+  return tr;
+}
+
+/* ============================================================== skills */
 async function loadSkills() {
-  const table = $("skills");
-  let payload;
+  let result;
   try {
-    payload = await getJSON("/api/skills");
-    const problem = apiProblem(payload);
-    if (problem) throw new Error(problemMessage(problem));
+    result = await getJSON("/api/skills");
   } catch (err) {
-    table.innerHTML = "";
-    table.appendChild(errorRow(2, "unavailable — " + errorText(err)));
+    $("skills-body").innerHTML = "";
+    $("skills-body").appendChild(rowSpan(3, "unavailable — " + err.message));
     return;
   }
-  table.innerHTML = payload.skills.map((skill) => `
-    <tr>
-      <td><strong>${skill.name}</strong><div class="sub mono">${skill.id}</div>
-        <div class="sub">${skill.description}</div></td>
-      <td><span class="pill ${skill.available ? "ready" : "unavailable"}">${skill.available ? "available" : "unavailable"}</span>
-        <div class="sub">${skill.requires_engine ? "needs engine" : "no engine needed"}</div></td>
-    </tr>`).join("");
+  const problem = problemOf(result.payload);
+  if (problem) {
+    $("skills-body").innerHTML = "";
+    $("skills-body").appendChild(rowSpan(3, problemText(problem)));
+    return;
+  }
+  state.skills = result.payload.skills || [];
+  renderSkills();
+  renderFeatures();
+  renderWorkspace(state.view);
 }
 
+function renderSkills() {
+  const body = $("skills-body");
+  if (!body) return;
+  body.innerHTML = "";
+  if (!state.skills.length) {
+    body.appendChild(rowSpan(3, "No skills are registered in this deployment."));
+    return;
+  }
+  state.skills.forEach((skill) => {
+    const tr = document.createElement("tr");
+    const name = el("td");
+    name.appendChild(el("strong", "", skill.name || skill.id));
+    name.appendChild(el("div", "sub mono", skill.id));
+    name.appendChild(el("div", "sub", skill.description || ""));
+    const status = el("td");
+    status.appendChild(el("span", "pill " + (skill.available ? "available" : "unavailable"), skill.available ? "available" : "unavailable"));
+    const needs = el("td", "sub", (skill.requires_engine ? "model engine" : "no model needed") + (skill.requires_network ? " · network" : "") + (skill.requires_write ? " · write" : ""));
+    tr.append(name, status, needs);
+    body.appendChild(tr);
+  });
+  const select = $("work-skill");
+  select.innerHTML = "";
+  state.skills.forEach((skill) => {
+    const option = document.createElement("option");
+    option.value = skill.id;
+    option.textContent = (skill.name || skill.id) + (skill.available ? "" : " (unavailable)");
+    select.appendChild(option);
+  });
+}
+
+/* ============================================================== tools */
 async function loadTools() {
-  const table = $("tools-list");
-  let payload;
+  let result;
   try {
-    payload = await getJSON("/api/tools");
-    const problem = apiProblem(payload);
-    if (problem) throw new Error(problemMessage(problem));
+    result = await getJSON("/api/tools");
   } catch (err) {
-    table.innerHTML = "";
-    table.appendChild(errorRow(2, "unavailable — " + errorText(err)));
+    $("tools-body").innerHTML = "";
+    $("tools-body").appendChild(rowSpan(4, "unavailable — " + err.message));
     return;
   }
-  table.innerHTML = payload.tools.map((tool) => `
-    <tr>
-      <td><strong>${tool.name}</strong><div class="sub mono">${tool.id}</div></td>
-      <td><span class="pill ${tool.permissions.allowed ? "ready" : "unavailable"}">${tool.permissions.allowed ? "permitted" : "denied"}</span>
-        <div class="sub">${tool.requires_network ? "network" : ""}${tool.requires_write ? " · write" : ""}</div></td>
-    </tr>`).join("");
+  const problem = problemOf(result.payload);
+  if (problem) {
+    $("tools-body").innerHTML = "";
+    $("tools-body").appendChild(rowSpan(4, problemText(problem)));
+    return;
+  }
+  state.tools = result.payload.tools || [];
+  renderTools();
+  renderFeatures();
 }
 
-async function send() {
-  const message = $("prompt").value.trim();
-  if (!message) return;
-  write("\n› " + message + "\n", "you");
-  $("prompt").value = "";
-  const body = {
-    message,
-    engine_id: $("engine").value || null,
-    use_tools: $("tools").checked,
-    use_memory: $("memory").checked,
+function renderTools() {
+  const body = $("tools-body");
+  body.innerHTML = "";
+  if (!state.tools.length) {
+    body.appendChild(rowSpan(4, "No tools are registered in this deployment."));
+    return;
+  }
+  state.tools.forEach((tool) => {
+    const permissions = tool.permissions || {};
+    const tr = document.createElement("tr");
+    const name = el("td");
+    name.appendChild(el("strong", "", tool.name || tool.id));
+    name.appendChild(el("div", "sub mono", tool.id));
+    const decision = el("td");
+    decision.appendChild(el("span", "pill " + (permissions.allowed ? "ready" : "denied"), permissions.allowed ? "permitted" : "denied"));
+    if (permissions.reason) decision.appendChild(el("div", "sub", permissions.reason));
+    const reqs = el("td", "sub", [tool.requires_network ? "network" : null, tool.requires_write ? "write" : null].filter(Boolean).join(" · ") || "sandboxed");
+    const action = el("td");
+    const use = el("button", "pill", "use");
+    use.type = "button";
+    use.style.cursor = "pointer";
+    use.addEventListener("click", () => { $("tool-id").value = tool.id; });
+    action.appendChild(use);
+    tr.append(name, decision, reqs, action);
+    body.appendChild(tr);
+  });
+  const select = $("tool-id");
+  const previous = select.value;
+  select.innerHTML = "";
+  state.tools.forEach((tool) => {
+    const option = document.createElement("option");
+    option.value = tool.id;
+    option.textContent = tool.id + ((tool.permissions || {}).allowed ? "" : " (denied by policy)");
+    select.appendChild(option);
+  });
+  if (previous) select.value = previous;
+}
+
+/* ========================================================== features */
+function skillFor(id) { return state.skills.find((skill) => skill.id === id) || null; }
+
+function featureStatus(skillIds) {
+  if (!skillIds || !skillIds.length) return { kind: "none", text: "not connected" };
+  const found = skillIds.map(skillFor).filter(Boolean);
+  if (!found.length) return { kind: "off", text: "not reported by this deployment" };
+  const available = found.filter((skill) => skill.available);
+  if (!available.length) return { kind: "unavailable", text: "unavailable — needs the inference host" };
+  if (available.length < found.length) return { kind: "partial", text: available.length + " of " + found.length + " skills available" };
+  return { kind: "available", text: "skills available" };
+}
+
+const FEATURES = [
+  // `pipeline: true` means the card reports inference readiness rather than a
+  // skill, because chatting is not a skill — it is the model itself.
+  { key: "chat", title: "Chat", note: "Real local inference", pipeline: true, icon: '<path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.5-4.8A8 8 0 1 1 21 12Z"/>' },
+  { key: "images", title: "Image Generation", note: "Not connected here", skills: null, icon: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l4.5-4.5L12 16l3-3 5 5"/>' },
+  { key: "code", title: "Code", note: "Analysis skills + chat", skills: WORKSPACES.code.skills, icon: '<path d="m9 8-5 4 5 4M15 8l5 4-5 4"/>' },
+  { key: "data", title: "Data Analysis", note: "Real computation", skills: WORKSPACES.data.skills, icon: '<path d="M5 19V5m0 14h14"/><path d="M9 15V9m4 6V7m4 8v-5"/>' },
+  { key: "research", title: "Research", note: "Skill + tools policy", skills: WORKSPACES.research.skills, icon: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>' },
+];
+
+function renderFeatures() {
+  const wrap = $("features");
+  wrap.innerHTML = "";
+  FEATURES.forEach((feature) => {
+    const ready = !!(state.health && state.health.inference && state.health.inference.ready);
+    const status = feature.pipeline
+      ? (ready ? { kind: "available", text: "real local inference" } : { kind: "unavailable", text: "no model loaded yet" })
+      : featureStatus(feature.skills);
+    const button = el("button", "feature");
+    button.type = "button";
+    button.dataset.nav = feature.key;
+    const icon = el("div", "ico");
+    icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + feature.icon + "</svg>";
+    const title = el("div", "t", feature.title);
+    const note = el("div", "s", feature.note);
+    const pill = el("span", "pill " + status.kind, status.text);
+    button.append(icon, title, note, pill);
+    button.addEventListener("click", () => openFeature(feature.key));
+    wrap.appendChild(button);
+  });
+
+  // Sidebar dots mirror the same truth, so the shell never contradicts a panel.
+  const dots = {
+    chat: state.health && state.health.inference && state.health.inference.ready ? "on" : "off",
+    images: "none",
+    code: featureStatus(WORKSPACES.code.skills).kind === "available" ? "on" : "off",
+    research: featureStatus(WORKSPACES.research.skills).kind === "available" ? "on" : "off",
+    data: featureStatus(WORKSPACES.data.skills).kind === "available" ? "on" : "off",
+    files: featureStatus(WORKSPACES.files.skills).kind === "available" ? "on" : "off",
+    tools: state.tools.some((tool) => (tool.permissions || {}).allowed) ? "on" : "off",
   };
+  Object.entries(dots).forEach(([key, kind]) => {
+    const dot = document.querySelector('[data-dot="' + key + '"]');
+    if (dot) dot.className = "nav-dot " + kind;
+  });
+  const settingsDot = document.querySelector('[data-dot="settings"]');
+  if (settingsDot) settingsDot.className = "nav-dot " + (state.database && state.database.configured ? (state.database.reachable ? "on" : "off") : "off");
+}
+
+function openFeature(key) {
+  if (key === "chat") { showNav("chat"); return; }
+  if (key === "images") { showNav("images"); return; }
+  showNav(key);
+}
+
+/* ====================================================== capability workspace */
+function renderWorkspace(key) {
+  const workspace = WORKSPACES[key];
+  if (!workspace) return;
+  $("work-title").textContent = NAV[key] ? NAV[key].title : "Workspace";
+  $("work-sub").textContent = workspace.headline;
+  $("work-detail").textContent = workspace.detail;
+  $("work-inputs").placeholder = '{"expression": "2+2"}';
+  const body = $("work-skills");
+  body.innerHTML = "";
+  workspace.skills.forEach((id) => {
+    const skill = skillFor(id);
+    const tr = document.createElement("tr");
+    const name = el("td");
+    name.appendChild(el("strong", "", skill ? skill.name : id));
+    name.appendChild(el("div", "sub mono", id));
+    if (skill && skill.description) name.appendChild(el("div", "sub", skill.description));
+    const status = el("td");
+    if (!skill) status.appendChild(el("span", "pill off", "not registered here"));
+    else status.appendChild(el("span", "pill " + (skill.available ? "available" : "unavailable"), skill.available ? "available" : "unavailable"));
+    const detail = el("td", "sub", skill ? (skill.requires_engine ? "needs a loaded model" : "no model needed") : "this deployment does not register the skill");
+    tr.append(name, status, detail);
+    body.appendChild(tr);
+  });
+
+  const unavailable = workspace.skills.map(skillFor).filter((skill) => skill && !skill.available);
+  if (unavailable.length === workspace.skills.length) {
+    notice("work-notice", "warn", "Nothing in this workspace can run yet.",
+      "Every skill it uses is unavailable on this deployment (" + unavailable.map((skill) => skill.id).join(", ") + "). Chat will answer with the runtime's own reason instead of a fabricated result.");
+  } else {
+    clearNotice("work-notice");
+  }
+}
+
+/* ====================================================== chat */
+function appendTurn(role, text) {
+  $("hero").hidden = true;
+  $("thread-wrap").hidden = false;
+  const turn = el("div", "turn " + role);
+  turn.appendChild(el("div", "avatar", role === "user" ? "You" : "A"));
+  const bubble = el("div", "bubble");
+  bubble.appendChild(el("div", "who", role === "user" ? "You" : "AlphaAI"));
+  const body = el("div", "body");
+  renderMarkdown(body, text || "");
+  bubble.appendChild(body);
+  const meta = el("div", "meta");
+  bubble.appendChild(meta);
+  turn.appendChild(bubble);
+  $("thread").appendChild(turn);
+  scrollThread();
+  return { turn, body, meta };
+}
+
+/* Minimal, escaped markdown: fenced code, inline code, bold. Everything is
+   inserted as text nodes, so model output can never inject markup. */
+function renderMarkdown(target, text) {
+  const segments = String(text).split(/```/);
+  segments.forEach((segment, index) => {
+    if (index % 2 === 1) {
+      const pre = el("pre");
+      const lines = segment.replace(/^[a-zA-Z0-9+-]*\n/, "");
+      pre.textContent = lines.replace(/\n$/, "");
+      target.appendChild(pre);
+      return;
+    }
+    segment.split(/(`[^`]*`|\*\*[^*]+\*\*)/g).forEach((piece) => {
+      if (!piece) return;
+      if (piece.startsWith("`") && piece.endsWith("`") && piece.length > 2) {
+        target.appendChild(el("code", "inline", piece.slice(1, -1)));
+      } else if (piece.startsWith("**") && piece.endsWith("**") && piece.length > 4) {
+        target.appendChild(el("strong", "", piece.slice(2, -2)));
+      } else {
+        target.appendChild(document.createTextNode(piece));
+      }
+    });
+  });
+}
+
+function scrollThread() {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: prefersReduced() ? "auto" : "smooth" });
+}
+
+function resetThread() {
+  $("thread").innerHTML = "";
+  $("thread-wrap").hidden = true;
+  $("hero").hidden = false;
+  clearNotice("chat-notices");
+}
+
+function setSending(active) {
+  const button = $("send");
+  button.classList.toggle("stop", active);
+  button.setAttribute("aria-label", active ? "Stop generating" : "Send message");
+  button.innerHTML = active
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>';
+}
+
+function stopStream() {
+  if (state.streaming) {
+    state.streaming.abort();
+    state.streaming = null;
+  }
+}
+
+async function send(message) {
+  const text = (message !== undefined ? message : $("prompt").value).trim();
+  if (!text) return;
+  if (state.streaming) return;
+  $("prompt").value = "";
+  $("prompt").style.height = "auto";
+  appendTurn("user", text);
+  const assistant = appendTurn("assistant", "");
+  const cursor = el("span", "cursor");
+  assistant.body.appendChild(cursor);
+
+  const body = {
+    message: text,
+    engine_id: $("engine").value || null,
+    use_tools: $("use-tools").checked,
+    use_memory: $("use-memory").checked,
+    client_id: state.clientId,
+    conversation_id: state.conversationId,
+  };
+
+  const controller = new AbortController();
+  state.streaming = controller;
+  setSending(true);
+  let accumulated = "";
+
   try {
     const res = await fetch("/api/chat/stream?format=sse", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
     if (!res.ok || !res.body) {
       const payload = await res.json().catch(() => ({}));
-      write((payload.error && (payload.error.message + (payload.error.remediation ? " — " + payload.error.remediation : ""))) || res.statusText, "err");
+      cursor.remove();
+      const problem = problemOf(payload);
+      assistant.body.textContent = "";
+      notice("chat-notices", "err", "The request was refused.",
+        problem ? problemText(problem) : "HTTP " + res.status + " " + res.statusText);
+      assistant.body.textContent = problem ? problem.message : "The server refused this request.";
       return;
     }
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
       const parts = buffer.split("\n\n");
       buffer = parts.pop();
       for (const part of parts) {
-        const line = part.split("\n").find((l) => l.startsWith("data: "));
+        const line = part.split("\n").find((candidate) => candidate.startsWith("data: "));
         if (!line) continue;
         const raw = line.slice(6);
         if (raw === "[DONE]") continue;
         let event;
-        try { event = JSON.parse(raw); } catch (e) { continue; }
-        if (event.type === "route") write(`[router] ${event.routing.reason}\n`, "sys");
-        if (event.type === "delta") write(event.text, "ai");
-        if (event.type === "tool_call") write(`[tools] ${event.calls.map((c) => c.tool_id).join(", ")}\n`, "sys");
-        if (event.type === "tool_result") write(`[result] ${JSON.stringify(event.result.output).slice(0, 400)}\n`, "sys");
-        if (event.type === "done") write(`\n[${event.engine_id} · ${event.attribution}]\n`, "sys");
-        if (event.type === "error") write(`[error:${event.error.code}] ${event.error.message}${event.error.remediation ? " — " + event.error.remediation : ""}\n`, "err");
+        try { event = JSON.parse(raw); } catch (err) { continue; }
+
+        if (event.type === "delta" && event.text) {
+          accumulated += event.text;
+          cursor.remove();
+          assistant.body.textContent = accumulated;
+          assistant.body.appendChild(cursor);
+        } else if (event.type === "done") {
+          cursor.remove();
+          renderMarkdown(assistant.body, accumulated);
+          assistant.meta.appendChild(el("span", "pill off", event.engine_id || "engine"));
+          if (event.model) assistant.meta.appendChild(el("span", "pill off", event.model));
+          if (event.runtime) assistant.meta.appendChild(el("span", "pill off", event.runtime));
+          if (event.usage && event.usage.total_tokens) assistant.meta.appendChild(el("span", "pill off", event.usage.total_tokens + " tokens"));
+        } else if (event.type === "persisted") {
+          handlePersisted(event, assistant);
+        } else if (event.type === "route" && event.routing) {
+          assistant.meta.appendChild(el("span", "pill off", "route: " + (event.routing.task || "general")));
+        } else if (event.type === "tool_call" && event.calls) {
+          assistant.meta.appendChild(el("span", "pill off", "tools: " + event.calls.map((call) => call.tool_id).join(", ")));
+        } else if (event.type === "error") {
+          cursor.remove();
+          notice("chat-notices", "err", "Inference did not answer.",
+            event.error.message + (event.error.remediation ? " — " + event.error.remediation : ""));
+          if (!accumulated) {
+            assistant.body.innerHTML = "";
+            assistant.body.appendChild(el("span", "sub", "[" + event.error.code + "] " + event.error.message));
+          }
+        }
       }
     }
   } catch (err) {
-    write("[network error] " + err.message + "\n", "err");
+    cursor.remove();
+    if (err.name === "AbortError") {
+      assistant.meta.appendChild(el("span", "pill off", "stopped by you"));
+    } else {
+      notice("chat-notices", "err", "Network error.", err.message);
+      if (!accumulated) assistant.body.textContent = "";
+    }
+  } finally {
+    state.streaming = null;
+    setSending(false);
+    scrollThread();
   }
 }
 
-async function refreshAll() {
-  // Each panel reports its own outcome: one failing endpoint never leaves the
-  // others on "loading" and never hides the reason.
-  const results = await Promise.allSettled([loadMeta(), loadHealth(), loadModels(), loadSkills(), loadTools()]);
-  for (const result of results) {
-    if (result.status === "rejected") write("[error loading status] " + errorText(result.reason) + "\n", "err");
+function handlePersisted(event, assistant) {
+  if (event.persisted) {
+    if (event.conversation_id) state.conversationId = event.conversation_id;
+    assistant.meta.appendChild(el("span", "pill saved", "saved to history"));
+    clearNotice("chat-notices");
+    loadHistory();
+    return;
+  }
+  assistant.meta.appendChild(el("span", "pill unavailable", "not saved"));
+  const problem = event.error || null;
+  if (problem && problem.code === "database_not_configured") {
+    notice("chat-notices", "warn", "This answer was not stored.",
+      "No database is configured for this deployment, so conversation history is unavailable. " + (problem.remediation || ""));
+  } else if (problem) {
+    notice("chat-notices", "err", "This answer was not stored.", problemText(problem));
   }
 }
 
-$("send").addEventListener("click", send);
-$("prompt").addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) send();
+/* ====================================================== history (Postgres) */
+async function loadHistory() {
+  const list = $("history-list");
+  let result;
+  try {
+    result = await getJSON("/api/conversations?client_id=" + encodeURIComponent(state.clientId) + "&limit=40");
+  } catch (err) {
+    list.innerHTML = "";
+    list.appendChild(el("div", "history-empty", "History unavailable — " + err.message));
+    return;
+  }
+  const problem = problemOf(result.payload);
+  if (problem) {
+    list.innerHTML = "";
+    const box = el("div", "history-empty");
+    box.appendChild(el("div", "", "History unavailable."));
+    if (problem.code === "database_not_configured") {
+      box.appendChild(el("div", "sub", "No DATABASE_URL on this deployment, so nothing is stored. Conversations still work in this browser."));
+    } else {
+      box.appendChild(el("div", "sub", problemText(problem)));
+    }
+    list.appendChild(box);
+    return;
+  }
+  const conversations = result.payload.conversations || [];
+  list.innerHTML = "";
+  if (!conversations.length) {
+    list.appendChild(el("div", "history-empty", "No saved conversations yet. Send a message and it will appear here."));
+    return;
+  }
+  conversations.forEach((conversation) => {
+    const row = el("div", "history-row" + (conversation.id === state.conversationId ? " active" : ""));
+    const open = el("button", "icon-btn", "");
+    open.style.flex = "1";
+    open.style.width = "auto";
+    open.style.color = "inherit";
+    open.style.border = "none";
+    open.style.display = "block";
+    open.style.textAlign = "left";
+    open.style.height = "auto";
+    open.style.padding = "0";
+    open.title = conversation.preview || conversation.title || conversation.id;
+    open.appendChild(el("div", "t", conversation.title || "Untitled"));
+    open.appendChild(el("div", "d", (conversation.message_count || 0) + " messages · " + String(conversation.updated_at || "").slice(0, 16).replace("T", " ")));
+    open.addEventListener("click", () => openConversation(conversation.id));
+    const remove = el("button", "icon-btn");
+    remove.type = "button";
+    remove.title = "Delete conversation";
+    remove.setAttribute("aria-label", "Delete " + (conversation.title || "conversation"));
+    remove.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+    remove.addEventListener("click", (event) => { event.stopPropagation(); deleteConversation(conversation.id); });
+    row.append(open, remove);
+    list.appendChild(row);
+  });
+}
+
+async function openConversation(id) {
+  let result;
+  try {
+    result = await getJSON("/api/conversations/" + encodeURIComponent(id) + "?client_id=" + encodeURIComponent(state.clientId));
+  } catch (err) {
+    notice("chat-notices", "err", "Could not load that conversation.", err.message);
+    return;
+  }
+  const problem = problemOf(result.payload);
+  if (problem) {
+    notice("chat-notices", "err", "Could not load that conversation.", problemText(problem));
+    return;
+  }
+  const conversation = result.payload.conversation;
+  state.conversationId = conversation.id;
+  resetThread();
+  (conversation.messages || []).forEach((message) => {
+    const turn = appendTurn(message.role === "user" ? "user" : "assistant", message.content);
+    if (message.role !== "user") {
+      if (message.engine_id) turn.meta.appendChild(el("span", "pill off", message.engine_id));
+      if (message.usage && message.usage.total_tokens) turn.meta.appendChild(el("span", "pill off", message.usage.total_tokens + " tokens"));
+      turn.meta.appendChild(el("span", "pill off", "stored " + String(message.created_at || "").slice(0, 16).replace("T", " ")));
+    }
+  });
+  $("hero").hidden = true;
+  $("thread-wrap").hidden = false;
+  showNav("chat");
+  loadHistory();
+}
+
+async function deleteConversation(id) {
+  try {
+    const result = await fetch("/api/conversations/" + encodeURIComponent(id) + "?client_id=" + encodeURIComponent(state.clientId), { method: "DELETE" });
+    const payload = await result.json().catch(() => ({}));
+    if (!result.ok || payload.error) {
+      notice("chat-notices", "err", "Could not delete that conversation.", payload.error ? problemText(payload.error) : "HTTP " + result.status);
+      return;
+    }
+  } catch (err) {
+    notice("chat-notices", "err", "Could not delete that conversation.", err.message);
+    return;
+  }
+  if (state.conversationId === id) { state.conversationId = null; resetThread(); }
+  loadHistory();
+}
+
+$("new-chat").addEventListener("click", () => {
+  state.conversationId = null;
+  resetThread();
+  showNav("chat");
+  loadHistory();
 });
-refreshAll();
-setInterval(() => { loadHealth().catch((err) => showStatusError(errorText(err))); }, 15000);
+
+/* ====================================================== settings */
+async function renderSettings() {
+  const stats = $("settings-stats");
+  const health = state.health || {};
+  stats.innerHTML = "";
+  const cards = [
+    ["API", "Online", "this page reached the FastAPI service"],
+    ["Inference", health.inference && health.inference.ready ? "Ready" : "Not ready", (health.inference && health.inference.detail) || "no model loaded on this host"],
+    ["Engines", (health.engines && health.engines.registered) ?? "—", (health.engines && health.engines.usable ? health.engines.usable + " usable" : "none usable")],
+    ["Skills", (health.skills && health.skills.registered) ?? "—", "server-side, permission checked"],
+    ["Tools", (health.tools && health.tools.registered) ?? "—", ((health.tools && health.tools.permitted) || 0) + " permitted by policy"],
+    ["Memory", (health.memory && health.memory.entries) ?? "off", "sqlite on the server"],
+  ];
+  cards.forEach(([label, value, detail]) => {
+    const card = el("div", "stat");
+    card.appendChild(el("div", "k", label));
+    card.appendChild(el("div", "v plain", String(value)));
+    card.appendChild(el("div", "d", detail));
+    stats.appendChild(card);
+  });
+
+  renderDatabase();
+  try {
+    const config = await getJSON("/api/config");
+    $("config-view").textContent = JSON.stringify(config.payload && config.payload.config ? config.payload.config : config.payload, null, 2);
+  } catch (err) {
+    $("config-view").textContent = "unavailable — " + err.message;
+  }
+  try {
+    const runtime = await getJSON("/api/runtime");
+    const payload = runtime.payload || {};
+    const hardware = (payload.doctor && payload.doctor.hardware_lines) || [];
+    const lines = []
+      .concat(hardware)
+      .concat(["", "capabilities:", JSON.stringify(payload.capabilities || {}, null, 2)]);
+    $("hardware-view").textContent = lines.join("\n");
+  } catch (err) {
+    $("hardware-view").textContent = "unavailable — " + err.message;
+  }
+  try {
+    const attribution = await getJSON("/api/attribution");
+    const payload = attribution.payload || {};
+    $("attribution-long").textContent = payload.long || $("attribution-long").textContent;
+  } catch (err) { /* the footer keeps its static text */ }
+}
+
+async function renderDatabase() {
+  const body = $("db-body");
+  let result;
+  try {
+    result = await getJSON("/api/database");
+  } catch (err) {
+    $("db-detail").textContent = "Database status unavailable — " + err.message;
+    body.innerHTML = "";
+    return;
+  }
+  const payload = result.payload || {};
+  const db = payload.database || {};
+  const config = payload.config || {};
+  body.innerHTML = "";
+  const rows = db.configured
+    ? [
+        ["configured", "yes"],
+        ["reachable", db.reachable ? "yes" : "no"],
+        ["host", (db.host || "—") + (db.port ? ":" + db.port : "")],
+        ["connection method", db.mode || "—"],
+        ["database / user", (db.database || "—") + " as " + (db.user || "—")],
+        ["sslmode", db.sslmode || "—"],
+        ["migrations applied", (db.migrations && db.migrations.applied) ?? "—"],
+        ["pending", ((db.migrations && db.migrations.pending) || []).join(", ") || "none"],
+        ["drift", ((db.migrations && db.migrations.drift) || []).map((item) => item.name).join(", ") || "none"],
+      ]
+    : [
+        ["configured", "no"],
+        ["detail", db.detail || "no database is configured for this deployment"],
+      ];
+  rows.forEach(([key, value]) => {
+    const tr = document.createElement("tr");
+    tr.appendChild(el("th", "", key));
+    tr.appendChild(el("td", "", String(value)));
+    body.appendChild(tr);
+  });
+  if (db.reachable === false && db.error) {
+    $("db-detail").textContent = db.error.message + (db.error.remediation ? " — " + db.error.remediation : "");
+  } else if (db.configured) {
+    $("db-detail").textContent = "Conversations, messages, preferences and usage records are stored in PostgreSQL (" + (config.mode || db.mode || "unknown connection") + "). Model weights are never stored in the database.";
+  } else {
+    $("db-detail").textContent = "No database is configured, so chat is answered but not stored. Set DATABASE_URL (Supabase: Project Settings → Database → Connection string → URI) to enable history: conversations, messages, preferences and usage records. See docs/DATABASE.md.";
+  }
+}
+
+$("db-refresh").addEventListener("click", renderDatabase);
+$("db-migrate").addEventListener("click", async () => {
+  const output = $("db-output");
+  output.hidden = false;
+  output.textContent = "Applying migrations…";
+  try {
+    const result = await postJSON("/api/database/migrate", {});
+    output.textContent = JSON.stringify(result.payload, null, 2);
+  } catch (err) {
+    output.textContent = "unavailable — " + err.message;
+  }
+  renderDatabase();
+});
+
+/* ====================================================== executors */
+$("work-run").addEventListener("click", async () => {
+  const output = $("work-output");
+  const skill = $("work-skill").value;
+  let inputs;
+  try { inputs = JSON.parse($("work-inputs").value || "{}"); } catch (err) {
+    output.hidden = false;
+    output.textContent = "Inputs must be valid JSON: " + err.message;
+    return;
+  }
+  output.hidden = false;
+  output.textContent = "Running " + skill + "…";
+  try {
+    const result = await postJSON("/api/skills/execute", { skill_id: skill, inputs, run_id: "dashboard" });
+    output.textContent = JSON.stringify(result.payload, null, 2);
+  } catch (err) {
+    output.textContent = "unavailable — " + err.message;
+  }
+});
+
+$("tool-run").addEventListener("click", async () => {
+  const output = $("tool-output");
+  const tool = $("tool-id").value;
+  let args;
+  try { args = JSON.parse($("tool-args").value || "{}"); } catch (err) {
+    output.hidden = false;
+    output.textContent = "Arguments must be valid JSON: " + err.message;
+    return;
+  }
+  output.hidden = false;
+  output.textContent = "Running " + tool + "…";
+  try {
+    const result = await postJSON("/api/tools/execute", { tool_id: tool, arguments: args, run_id: "dashboard" });
+    output.textContent = JSON.stringify(result.payload, null, 2);
+  } catch (err) {
+    output.textContent = "unavailable — " + err.message;
+  }
+});
+
+/* ====================================================== composer */
+$("composer").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (state.streaming) { stopStream(); return; }
+  send();
+});
+$("prompt").addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    if (!state.streaming) send();
+  }
+});
+$("prompt").addEventListener("input", (event) => {
+  const field = event.target;
+  field.style.height = "auto";
+  field.style.height = Math.min(field.scrollHeight, 190) + "px";
+});
+
+/* ====================================================== start */
+async function start() {
+  resetThread();
+  renderFeatures();
+  try { await loadModels(); } catch (err) { /* reported in its own panel */ }
+  try { await loadSkills(); } catch (err) { /* reported in its own panel */ }
+  try { await loadTools(); } catch (err) { /* reported in its own panel */ }
+  try { await loadHealth(); } catch (err) { /* status pill shows it */ }
+  try { await loadHistory(); } catch (err) { /* the list shows it */ }
+  syncPreferences();
+}
+
+/* Preferences live in Postgres next to the conversations. When no database is
+   configured the request answers 503 — that is expected and needs no UI noise. */
+async function syncPreferences() {
+  try {
+    await fetch("/api/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: state.clientId,
+        preferences: {
+          engine_id: $("engine").value || null,
+          use_tools: $("use-tools").checked,
+          use_memory: $("use-memory").checked,
+        },
+      }),
+    });
+  } catch (err) { /* history unavailable: nothing to sync, nothing to report */ }
+}
+
+start();
+setInterval(() => { loadHealth().catch(() => {}); }, 20000);
 </script>
 </body>
 </html>

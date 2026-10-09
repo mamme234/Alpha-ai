@@ -207,9 +207,20 @@ def test_orchestrate_endpoint(config) -> None:
 def test_dashboard_is_served(config) -> None:
     with make_client(config) as client:
         html = client.get("/").text
-        assert "ALPHA" in html
-        assert "Intelligence, built from the ground up." in html
-        assert "/api/chat/stream" in html
+        # The wordmark the repository ships (there is no image asset, so the logo
+        # is the ALPHA AI wordmark rendered as type).
+        assert "Alpha AI" in html
+        assert "Hello, I'm Alpha." in html
+        assert "Ask me anything..." in html
+        # The application shell: every workspace the redesign promises.
+        for label in ("Chat", "Image Generation", "Code", "Research", "Data Analysis", "File Assistant", "Tools", "Settings"):
+            assert label in html, label
+        # It is wired to this deployment's real endpoints, not to a mock.
+        for endpoint in ("/api/chat/stream", "/api/health", "/api/models", "/api/skills", "/api/tools", "/api/conversations", "/api/database"):
+            assert endpoint in html, endpoint
+        # No external AI provider is referenced anywhere in the frontend.
+        for forbidden in ("openai", "anthropic", "gemini", "ollama"):
+            assert forbidden not in html.lower()
 
 
 def test_dashboard_can_be_disabled(config) -> None:
