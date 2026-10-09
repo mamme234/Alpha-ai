@@ -41,10 +41,10 @@ Two deployment shapes use the same code:
 
 | Resource | Required | Notes |
 | --- | --- | --- |
-| RAM | ~1 GB free (model needs ~0.9 GB resident) | a 1 GB instance is the practical minimum |
-| Disk | ~1 GB **persistent** (model is 491 MB + runtime state) | must survive restarts, do **not** bake weights into an image |
+| RAM | ~1 GB free (model needs ~0.9 GB resident) | a 1 GB instance is the practical minimum; 2 GB leaves headroom |
+| Disk | ~1 GB **persistent** (model is 491 MB + runtime state) | must survive restarts; weights are never committed to git |
 | CPU | 1+ cores | ~9 tokens/s per core on a 0.5B Q4_K_M model |
-| Network | outbound HTTPS on first boot | only to download the model from Hugging Face |
+| Network | outbound HTTPS **during the image build** | only to fetch the model from Hugging Face (`deploy/prefetch_model.py`) |
 
 ## 2. Startup command
 
@@ -75,10 +75,14 @@ alphaai models list                                 # must print AVAILABLE
 The installer verifies hardware, disk space and the authoritative source before
 downloading, checks the SHA-256 and GGUF magic, then records provenance and runs
 a real load test. A model is never marked available on files alone. Weights are
-gitignored (`models/*/`) and are never part of an image, the repo or a deployment
-bundle.
+gitignored (`models/*/`) and are **never** committed, pushed or uploaded as part
+of a repository or deployment bundle.
 
-`deploy/Dockerfile` does all of this and is the supported inference-host image:
+`deploy/Dockerfile` does all of this and is the supported inference-host image.
+While the image is built, `deploy/prefetch_model.py` fetches the weights from the
+URL recorded in `configs/models/<id>.json` and verifies size **and** SHA-256 — so
+a broken or tampered download fails the *build*, visibly, instead of becoming a
+quiet runtime surprise:
 
 ```bash
 docker build -f deploy/Dockerfile -t alphaai-inference .
@@ -89,11 +93,12 @@ docker run -d --name alphaai -p 8090:8090 \
   alphaai-inference
 ```
 
-`deploy/entrypoint.sh` installs the model on first boot, skips it on every later
-start (the weights persist on the `/data` volume), then serves. With
-`ALPHAI_INFERENCE_TOKEN` set the container requires that secret on `/api/*`
-(section 4) — the gateway presents it, and only direct inspection needs the
-header.
+`deploy/entrypoint.sh` copies those weights onto the `/data` volume on the first
+boot, then runs `alphaai models install` to **verify and load-test** them (the
+copy is never assumed good), and skips that on every later start — the weights
+persist on the volume. With `ALPHAI_INFERENCE_TOKEN` set the container requires
+that secret on `/api/*` (section 4) — the gateway presents it, and only direct
+inspection needs the header.
 
 ## 4. Environment variables (inference host)
 
@@ -201,11 +206,11 @@ browser never makes a cross-origin request and CORS is not exercised at all.
    it.
 
 4. Verify (section 7) that `GET https://<project>.vercel.app/api/health`
-   reports `inference.ready: true` **and** `gateway.reachable: true`. Until the
-   variable is set the same endpoint answers 200 with
-   `"gateway": {"enabled": false}` and `inference.ready: false` — the two are
-   distinguishable on purpose, so a half-configured deployment cannot look
-   healthy.
+   reports `inference.ready: true` **and** a `gateway` block with
+   `"reachable": true`. Until the variable is set the same endpoint answers 200
+   with **no** `gateway` block (the deployment is running its own engine) and
+   `inference.ready: false` — the two states are distinguishable on purpose, so
+   a half-configured deployment cannot look healthy.
 
 `ALPHAI_INFERENCE_URL` is the only wiring between the two tiers. Nothing in the
 source hard-codes a host: no `localhost`, no fixed port, no service hostname.
@@ -456,27 +461,58 @@ The container host must provide:
 
 `render.yaml` at the repository root describes the inference host exactly: it
 builds `deploy/Dockerfile` with the repository root as the build context,
-attaches a 2 GB persistent disk at `/data`, checks `GET /api/health`, and prompts
-for the two variables a deployment has to decide.
+attaches a 2 GB persistent disk at `/data`, asks for `plan: standard`, and
+prompts for the two variables a deployment has to decide.
 
-1. On Render: **New → Blueprint**, connect this repository. Render reads
-   `render.yaml` and shows the service it will create.
-2. Fill the prompted variables — `ALPHAI_INFERENCE_TOKEN` (recommended) and
-   `ALPHAI_CORS_ORIGINS` (not needed with same-origin routing) — and pick an
-   instance with **at least 1 GB of RAM**. Render's cheapest plan (0.5 CPU /
-   512 MB) cannot hold the ~0.9 GB resident model, and a persistent disk needs a
-   paid instance anyway.
-3. Apply. The first build installs `.[api,llama]` with the CPU llama.cpp wheel;
-   the first boot downloads the 491 MB GGUF onto the disk (a few minutes).
-4. Copy the service URL (`https://<service>.onrender.com`). That is
+**Cost first (nothing is charged until you press Apply on an account with a
+payment method):**
+
+| Item | Price | Why it is needed |
+| --- | --- | --- |
+| Render **Standard** instance (2 GB RAM / 1 CPU) | ~$25 / month | the model needs ~1.3 GB resident; the 512 MB plans (`free`, `starter`) cannot hold it, and the free plan has no persistent disk |
+| Persistent disk, 2 GB | ~$0.50 / month | holds the 491 MB GGUF across restarts and redeploys |
+| **Total** | **~$25.50 / month** | no per-request or bandwidth charge applies at this size |
+
+**Steps**
+
+1. Create (or sign in to) a Render account and connect it to GitHub, granting
+   Render access to this repository — *Dashboard → GitHub → Connect*.
+2. **New → Blueprint**, select this repository and the branch to deploy. Render
+   reads `render.yaml` and shows the `alphaai-inference` service it will create.
+3. Fill the prompted variables — `ALPHAI_INFERENCE_TOKEN` (recommended: a long
+   random string; set the same value on the Vercel project) and
+   `ALPHAI_CORS_ORIGINS` (not needed with same-origin routing) — confirm the
+   **Standard** instance and the 2 GB disk, and add a payment method if the
+   account has none. Then **Apply**.
+4. The build installs `.[api,llama,db]` with the CPU llama.cpp wheel and fetches
+   the 491 MB GGUF into the image (verified against its SHA-256). First boot
+   copies it onto the disk, verifies it again and runs a real load test — about
+   a minute end to end.
+5. Copy the service URL (`https://<service>.onrender.com`). That is
    `ALPHAI_INFERENCE_URL`. Render terminates TLS and forces HTTPS on that host,
    and it injects `$PORT`, which `alphaai serve` already honours.
-   Verify before wiring it up:
 
-   ```bash
-   curl -s https://<service>.onrender.com/api/health | python3 -m json.tool
-   # inference.ready must be true (a token-protected host needs the header)
-   ```
+**No health check path is declared, deliberately.** Render's probe is an
+unauthenticated `GET`, while a token-protected host answers `401` to every
+`/api/*` request without the shared secret — the probe would declare a healthy
+deployment dead. Render instead marks the deploy live when the port opens, and
+`deploy/entrypoint.sh` only starts the server after the weights have been
+copied, verified and load-tested, so "the port is open" really means "the API
+is ready". Verify the model-level state yourself:
+
+```bash
+INFER=https://<service>.onrender.com
+
+# 401 without the shared secret — the auth is working, not a broken deploy
+curl -s -o /dev/null -w '%{http_code}\n' $INFER/api/health
+
+curl -s $INFER/api/health -H "Authorization: Bearer $ALPHAI_INFERENCE_TOKEN" \
+  | python3 -m json.tool          # inference.ready must be true
+```
+
+If the service stays unhealthy, read *Logs* in the Render dashboard: the
+entrypoint prints every step (seed, install, verification) and a failed model
+install is reported as `inference.ready: false` rather than hidden.
 
 ### Alternative: Fly.io
 
@@ -516,7 +552,8 @@ that cannot be done from the source tree:
 
 1. **Run the inference image on a container host.** `deploy/Dockerfile` is the
    supported image; build it from this repository and mount a volume at `/data`.
-   The GGUF weights are downloaded on first boot and are never committed.
+   The GGUF weights are fetched while the image builds and copied onto the
+   volume on the first boot; they are never committed to git.
 2. **Record its public HTTPS URL.** That URL is the value of
    `ALPHAI_INFERENCE_URL`. Never use a temporary/workspace preview URL or an
    AI provider — it must be the `alphaai serve` instance from step 1.

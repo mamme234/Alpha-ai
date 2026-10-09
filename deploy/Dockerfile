@@ -14,8 +14,8 @@
 # long-lived host like this one should use the direct connection (port 5432) or
 # Supavisor's *session* mode, not the transaction pooler. See docs/DATABASE.md.
 #
-# The GGUF weights are downloaded on first boot into /data/models (about
-# 0.5 GB) and are never baked into the image or committed to git.
+# The GGUF weights are fetched at build time into /opt/model-cache (a layer of
+# this image, never of git) and copied onto /data/models on the first boot.
 
 FROM python:3.11-slim
 
@@ -45,6 +45,17 @@ RUN pip install --upgrade pip \
         ".[api,llama,db]"
 
 COPY deploy/entrypoint.sh /app/deploy/entrypoint.sh
+COPY deploy/prefetch_model.py /app/deploy/prefetch_model.py
+
+# Fetch the GGUF weights into the image while it is built. The persistent disk
+# is not writable during a build, so downloading here is what lets the first
+# boot seed /data in a second instead of holding the port closed for as long as
+# the transfer takes. The URL, size and SHA-256 come from configs/models/<id>.json
+# (the same provenance `alphaai models install` checks), the checksum is verified
+# before the build can succeed, and nothing under models/ is ever committed to
+# git — these bytes live only in this image layer and, at runtime, on the disk.
+ARG MODEL_ID=qwen2.5-0.5b-instruct-gguf
+RUN python deploy/prefetch_model.py "${MODEL_ID}" --spec-dir configs --dest /opt/model-cache
 
 # Model weights, memory and logs live here and must be a persistent volume.
 VOLUME ["/data"]

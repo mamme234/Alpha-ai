@@ -5,19 +5,29 @@
 # weights, which are never committed, must survive a restart) and serves HTTPS
 # on *.onrender.com — no CLI and no local Docker required.
 #
-# Deploy: render.com → New → Blueprint → connect this repository. Then set the
-# prompted secret, and give the service at least 1 GB of RAM (the Starter plan's
-# 512 MB cannot hold the model: weights are ~0.9 GB resident).
+# Deploy: render.com → New → Blueprint → connect this repository. Render prompts
+# for ALPHAI_INFERENCE_TOKEN below, then builds the image and starts the service.
+#
+# Cost before anything is charged: a persistent disk is not available on the
+# free plan, and the free/starter instances (512 MB) cannot hold the ~1.3 GB
+# resident model. `plan: standard` (2 GB RAM / 1 CPU) is the smallest instance
+# this server fits on: about $25/month of compute plus $0.50/month for the 2 GB
+# disk. Nothing runs until you press Apply with a payment method on the account.
 services:
   - type: web
     name: alphaai-inference
     runtime: docker
     dockerfilePath: ./deploy/Dockerfile
     dockerContext: .
-    # A 200 from /api/health only after the API is up, so a broken instance fails
-    # the deploy instead of serving errors. Inference readiness is reported
-    # separately in the payload (inference.ready) and is never faked.
-    healthCheckPath: /api/health
+    plan: standard
+    # No health check path: Render's probe is an unauthenticated GET, and this
+    # host answers 401 to any /api/* request that does not carry the shared
+    # ALPHAI_INFERENCE_TOKEN (see alphaai/api/app.py). A protected host cannot
+    # be probed without credentials, so Render instead marks the deploy live
+    # when the port opens — and deploy/entrypoint.sh only starts the server
+    # after the model has been copied, verified and load-tested, so listening
+    # means the API is genuinely ready. `inference.ready` in the payload is the
+    # model-level readiness signal and is reported honestly either way.
     # A persistent disk pins the service to a single instance; the container
     # writes its weights, memory store, logs and tool sandbox under /data.
     disk:
@@ -25,8 +35,9 @@ services:
       mountPath: /data
       sizeGB: 2
     envVars:
-      # Shared secret this host requires from the Vercel gateway. Leave unset to
-      # serve /api/* without a token.
+      # Shared secret this host requires from the Vercel gateway. Set it here
+      # and set the same value as ALPHAI_INFERENCE_TOKEN on the Vercel project.
+      # Leave unset only to serve /api/* without a token.
       - key: ALPHAI_INFERENCE_TOKEN
         sync: false
       # Only needed when a browser calls this host from a different origin; the

@@ -317,9 +317,10 @@ def _repo_file(name: str) -> str:
 def test_render_blueprint_builds_the_inference_image_with_a_persistent_disk() -> None:
     """The inference host needs a Dockerfile build plus storage that persists.
 
-    The GGUF weights are downloaded on first boot and are never committed, so
-    without a disk a restart would lose them; and the service must not scale to
-    zero while a model is resident.
+    The GGUF weights live on the disk and are never committed, so without one a
+    restart would lose them; and the service must not scale to zero while a
+    model is resident. The instance must also hold the model: the 512 MB plans
+    cannot, so the blueprint asks for the smallest one that can.
     """
 
     text = _repo_file("render.yaml")
@@ -327,10 +328,26 @@ def test_render_blueprint_builds_the_inference_image_with_a_persistent_disk() ->
     assert "dockerfilePath: ./deploy/Dockerfile" in text
     assert "dockerContext: ." in text
     assert "mountPath: /data" in text
-    assert "healthCheckPath: /api/health" in text
+    # Smallest instance that fits ~1.3 GB resident weights (Starter is 512 MB).
+    assert "plan: standard" in text
     # Secrets are supplied by the operator at deploy time, never defaulted in.
     assert "ALPHAI_INFERENCE_TOKEN" in text
     assert text.count("sync: false") == 2
+
+
+def test_render_blueprint_has_no_unauthenticated_health_probe() -> None:
+    """The host requires the shared token on /api/*, so no credential-less probe.
+
+    A platform health check is a plain GET with no headers. With
+    ``ALPHAI_INFERENCE_TOKEN`` set (the normal, private configuration) that probe
+    would receive 401 and Render would declare a healthy deployment dead. The
+    blueprint therefore leaves the health path out and readiness comes from the
+    port opening — which deploy/entrypoint.sh only does after the model has been
+    seeded, verified and load-tested.
+    """
+
+    text = _repo_file("render.yaml")
+    assert "healthCheckPath" not in text
 
 
 def test_no_model_weights_are_committed_anywhere() -> None:

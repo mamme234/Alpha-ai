@@ -11,6 +11,8 @@ set -eu
 
 MODEL_ID="${ALPHAI_MODEL_ID:-qwen2.5-0.5b-instruct-gguf}"
 MODELS_DIR="${ALPHAI_MODELS_DIR:-/data/models}"
+# Weights baked into the image by deploy/prefetch_model.py at build time.
+CACHE_DIR="${ALPHAI_MODEL_CACHE_DIR:-/opt/model-cache}"
 
 # An empty ALPHAI_CORS_ORIGINS resolves to an empty allow-list, which blocks
 # every browser request. Warn instead of failing silently.
@@ -21,10 +23,23 @@ if [ -z "${ALPHAI_CORS_ORIGINS:-}" ]; then
 fi
 
 if [ "${ALPHAI_SKIP_MODEL_INSTALL:-0}" != "1" ]; then
-  if [ -d "${MODELS_DIR}/${MODEL_ID}" ]; then
+  # First boot: seed the persistent disk from the weights the image already
+  # carries (deploy/prefetch_model.py fetched them at build time), so the port
+  # opens in seconds instead of after a 491 MB transfer. The installer then
+  # verifies the copy (size + SHA-256) and load-tests it — the model is never
+  # reported available just because files exist.
+  SEEDED=0
+  if [ ! -d "${MODELS_DIR}/${MODEL_ID}" ] && [ -d "${CACHE_DIR}/${MODEL_ID}" ]; then
+    echo "AlphaAI: seeding ${MODEL_ID} from the image cache onto ${MODELS_DIR}"
+    mkdir -p "${MODELS_DIR}/${MODEL_ID}"
+    cp -r "${CACHE_DIR}/${MODEL_ID}/." "${MODELS_DIR}/${MODEL_ID}/"
+    SEEDED=1
+  fi
+
+  if [ -d "${MODELS_DIR}/${MODEL_ID}" ] && [ "${SEEDED}" != "1" ]; then
     echo "AlphaAI: model ${MODEL_ID} already present in ${MODELS_DIR}"
   else
-    echo "AlphaAI: installing ${MODEL_ID} into ${MODELS_DIR} (about 0.5 GB, once)"
+    echo "AlphaAI: installing ${MODEL_ID} into ${MODELS_DIR}"
     python -m alphaai.cli models install "${MODEL_ID}" || \
       echo "AlphaAI: model install failed; /api/health will report it as unavailable"
   fi
